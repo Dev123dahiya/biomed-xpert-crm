@@ -1,21 +1,36 @@
 # ---- Build stage ----
-FROM node:20-alpine AS build
+FROM node:20-bookworm AS build
+
 WORKDIR /app
+
 COPY package*.json ./
 COPY prisma ./prisma
+
 RUN npm ci
+
 COPY tsconfig.json ./
 COPY src ./src
-RUN npx prisma generate && npm run build
+
+RUN npx prisma generate
+RUN npm run build
 
 # ---- Runtime stage ----
-FROM node:20-alpine AS runtime
+FROM node:20-bookworm
+
 WORKDIR /app
+
 ENV NODE_ENV=production
+
 COPY package*.json ./
 COPY prisma ./prisma
-RUN npm ci --omit=dev && npx prisma generate
+
+RUN npm ci --omit=dev
+RUN npx prisma generate
+
 COPY --from=build /app/dist ./dist
+
 RUN mkdir -p uploads
-EXPOSE 4000
+
+EXPOSE 10000
+
 CMD ["node", "dist/server.js"]
