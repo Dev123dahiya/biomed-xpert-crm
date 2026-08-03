@@ -1,0 +1,248 @@
+// BIOMED XPERT Lead Tracker Dashboard
+// Phase 3 database schema (Prisma for PostgreSQL)
+//
+// Money is stored as Decimal(14, 2) (Postgres NUMERIC) for exact values with
+// no float drift and headroom for high value equipment deals. This refines the
+// "integer minor units" note from Phase 2; flag if you prefer BigInt minor units.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  QUOTE_SHARED
+  WON
+  LOST
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Role {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id            String          @id @default(cuid())
+  email         String          @unique
+  passwordHash  String
+  name          String
+  active        Boolean         @default(true)
+  roleId        String
+  role          Role            @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  ownedLeads    Lead[]          @relation("LeadOwner")
+  timelineActs  LeadTimeline[]  @relation("TimelineActor")
+  notifications Notification[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([roleId])
+}
+
+model Customer {
+  id            String   @id @default(cuid())
+  customerName  String
+  contactPerson String?
+  company       String?
+  gstin         String?
+  phone         String?
+  email         String?
+  addressLine1  String?
+  addressLine2  String?
+  city          String?
+  state         String?
+  pinCode       String?
+  country       String?  @default("India")
+  balance       Decimal  @default(0) @db.Decimal(14, 2)
+  totalValue    Decimal  @default(0) @db.Decimal(14, 2)
+  leads         Lead[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([customerName])
+  @@index([company])
+  @@index([gstin])
+  @@index([phone])
+  @@index([email])
+  @@index([city])
+}
+
+model LeadSource {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  leads     Lead[]
+  createdAt DateTime @default(now())
+}
+
+model Lead {
+  id          String         @id @default(cuid())
+  customerId  String
+  customer    Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  sourceId    String
+  source      LeadSource     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  sourceOther String?
+  status      LeadStatus     @default(NEW)
+  approxValue Decimal        @default(0) @db.Decimal(14, 2)
+  priority    Priority       @default(MEDIUM)
+  notes       String?
+  ownerId     String?
+  owner       User?          @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  products    LeadProduct[]
+  timeline    LeadTimeline[]
+  quotes      Quote[]
+  followUps   FollowUp[]
+  wonDeal     WonDeal?
+  lostDeal    LostDeal?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([customerId])
+  @@index([sourceId])
+  @@index([status])
+  @@index([ownerId])
+  @@index([createdAt])
+}
+
+model LeadTimeline {
+  id         String      @id @default(cuid())
+  leadId     String
+  lead       Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  fromStatus LeadStatus?
+  toStatus   LeadStatus
+  actorId    String?
+  actor      User?       @relation("TimelineActor", fields: [actorId], references: [id], onDelete: SetNull)
+  note       String?
+  createdAt  DateTime    @default(now())
+
+  @@index([leadId])
+  @@index([createdAt])
+}
+
+model Product {
+  id           String        @id @default(cuid())
+  name         String
+  make         String
+  model        String
+  category     String?
+  description  String?
+  unitPrice    Decimal       @default(0) @db.Decimal(14, 2)
+  leadProducts LeadProduct[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([name, make, model])
+  @@index([category])
+}
+
+model LeadProduct {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity  Int      @default(1)
+  price     Decimal  @default(0) @db.Decimal(14, 2)
+  lineTotal Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+  @@index([productId])
+}
+
+model Quote {
+  id          String   @id @default(cuid())
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  quoteNumber String
+  quoteDate   DateTime
+  fileUrl     String?
+  remarks     String?
+  createdAt   DateTime @default(now())
+
+  @@index([leadId])
+}
+
+model FollowUp {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  dueAt     DateTime
+  note      String?
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+  @@index([dueAt])
+  @@index([done])
+}
+
+model WonDeal {
+  id            String            @id @default(cuid())
+  leadId        String            @unique
+  lead          Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  finalValue    Decimal           @default(0) @db.Decimal(14, 2)
+  invoiceNumber String?
+  closingDate   DateTime?
+  products      WonDealProduct[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+model WonDealProduct {
+  id        String  @id @default(cuid())
+  wonDealId String
+  wonDeal   WonDeal @relation(fields: [wonDealId], references: [id], onDelete: Cascade)
+  name      String
+  make      String?
+  model     String?
+  quantity  Int     @default(1)
+  amount    Decimal @default(0) @db.Decimal(14, 2)
+
+  @@index([wonDealId])
+}
+
+model LostDeal {
+  id         String   @id @default(cuid())
+  leadId     String   @unique
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  reason     String
+  competitor String?
+  remarks    String?
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
