@@ -67,8 +67,8 @@ Open http://localhost:5173.
 
 | Role  | Email                   | Password   |
 |-------|-------------------------|------------|
-| Admin | admin@biomedxpert.com   | Admin@123  |
-| Sales | sales@biomedxpert.com   | Sales@123  |
+| Admin | admin@biomedxpert.com   | Admin@***  |
+| Sales | sales@biomedxpert.com   | Sales@***  |
 
 ## Notes
 
