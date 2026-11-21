@@ -4,7 +4,8 @@ import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatedNumber } from "../../components/ui/AnimatedNumber";
 import { Segmented, Tabs } from "../../components/ui/Segmented";
-import { Tooltip } from "../../components/ui/Tooltip";
+import { DetailRows, HoverCard, HoverTitle, Tooltip } from "../../components/ui/HoverCard";
+import { DateHint } from "../../components/ui/Figure";
 import { spring } from "../../lib/motion";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -22,7 +23,7 @@ import { useLeadSources, useTeam } from "../../hooks/useMeta";
 import { apiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { downloadFile } from "../../lib/download";
-import { dayDiff, daysSince, inr, inrCompact, num, relativeDate, shortDate } from "../../lib/format";
+import { dayDiff, daysSince, fullDateTime, inr, inrCompact, num, relativeDate, shortDate } from "../../lib/format";
 import { useDebounced } from "../../lib/hooks";
 import { BOARD_ORDER, canMoveTo, isTerminal, nextForwardStages, STAGE_META, stageLabel } from "../../lib/stages";
 import type { BoardCard, BoardColumn, LeadStatus } from "../../types";
@@ -93,14 +94,53 @@ const FollowUpTag = ({ at }: { at: string }): JSX.Element => {
   const d = dayDiff(at);
   const overdue = d < 0;
   return (
-    <span
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium"
-      style={{ background: overdue ? "var(--danger-soft)" : d === 0 ? "var(--primary-soft)" : "var(--surface-3)", color: overdue ? "var(--danger)" : d === 0 ? "var(--primary-text)" : "var(--text-2)" }}
-      title={`Next follow-up ${shortDate(at)}`}
-    >
-      <CalendarClock className="h-3 w-3" />
-      {overdue ? `${Math.abs(d)}d overdue` : relativeDate(at)}
-    </span>
+    <Tooltip content={`Next follow-up: ${fullDateTime(at)}`}>
+      <span
+        className="inline-flex cursor-help items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium"
+        style={{ background: overdue ? "var(--danger-soft)" : d === 0 ? "var(--primary-soft)" : "var(--surface-3)", color: overdue ? "var(--danger)" : d === 0 ? "var(--primary-text)" : "var(--text-2)" }}
+      >
+        <CalendarClock className="h-3 w-3" />
+        {overdue ? `${Math.abs(d)}d overdue` : relativeDate(at)}
+      </span>
+    </Tooltip>
+  );
+};
+
+// Everything known about a lead, shown when the pointer rests on its card or row.
+const LeadPreview = ({ card, status }: { card: BoardCard; status: LeadStatus }): JSX.Element => {
+  const age = daysSince(card.updatedAt);
+  const d = card.nextFollowUp ? dayDiff(card.nextFollowUp) : null;
+  return (
+    <>
+      <HoverTitle sub={[card.contact !== card.customer ? card.contact : null, card.city].filter(Boolean).join(", ") || undefined}>
+        {card.customer ?? "Customer"}
+      </HoverTitle>
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <StageBadge status={status} />
+        <PriorityBadge priority={card.priority} />
+      </div>
+      <div className="border-t pt-2 divider">
+        <DetailRows
+          rows={[
+            [card.finalValue != null ? "Order value" : "Deal value", inr(card.finalValue ?? card.approxValue)],
+            card.owner ? ["Owner", card.owner.name] : ["Owner", <span className="muted font-normal">Unassigned</span>],
+            card.source ? ["Source", card.source] : null,
+            ["Equipment", card.productCount === 0 ? <span className="muted font-normal">None added</span> : `${card.productCount} item${card.productCount === 1 ? "" : "s"}`],
+            card.quoteCount ? ["Quotations", num(card.quoteCount)] : null,
+            card.nextFollowUp && !isTerminal(status)
+              ? ["Next follow-up", <span style={{ color: d !== null && d < 0 ? "var(--danger)" : undefined }}>{fullDateTime(card.nextFollowUp)}</span>]
+              : !isTerminal(status)
+                ? ["Next follow-up", <span className="muted font-normal">None scheduled</span>]
+                : null,
+            card.createdAt ? ["Opened", shortDate(card.createdAt)] : null,
+            card.updatedAt ? ["Last update", `${shortDate(card.updatedAt)}${age >= 7 ? ` (${age}d idle)` : ""}`] : null,
+          ]}
+        />
+      </div>
+      <div className="muted mt-2 text-[11px]">
+        {isTerminal(status) ? "Click to open the lead" : "Click to open, or drag the card to move it"}
+      </div>
+    </>
   );
 };
 
@@ -126,6 +166,7 @@ const LeadCard = ({ card, status, dragging, onDragStart, onDragEnd, onAdvance, o
       transition={spring}
       className="group/card relative"
     >
+      <HoverCard width={266} side="right" disabled={dragging} delay={220} content={<LeadPreview card={card} status={status} />}>
       <Link
         to={`/leads/${card.id}`}
         draggable={!terminal}
@@ -155,9 +196,14 @@ const LeadCard = ({ card, status, dragging, onDragStart, onDragEnd, onAdvance, o
           {card.nextFollowUp && !terminal && <FollowUpTag at={card.nextFollowUp} />}
           <span className="inline-flex items-center gap-1" title="Products"><Package className="h-3 w-3" />{card.productCount}</span>
           {Boolean(card.quoteCount) && <span className="inline-flex items-center gap-1" title="Quotes"><FileText className="h-3 w-3" />{card.quoteCount}</span>}
-          {!terminal && age >= 7 && <span title="Days since last update" style={{ color: age >= 21 ? "var(--warning)" : undefined }}>{age}d idle</span>}
+          {!terminal && age >= 7 && (
+            <Tooltip content={`No change for ${age} days. Last update ${shortDate(card.updatedAt)}.`}>
+              <span className="cursor-help" style={{ color: age >= 21 ? "var(--warning)" : undefined }}>{age}d idle</span>
+            </Tooltip>
+          )}
         </div>
       </Link>
+      </HoverCard>
       {!terminal && (
         <div className="pointer-events-none absolute bottom-2 right-2 flex translate-y-1 gap-1 opacity-0 transition-all duration-150 group-hover/card:pointer-events-auto group-hover/card:translate-y-0 group-hover/card:opacity-100">
           {next ? (
@@ -222,12 +268,32 @@ const Column = ({ col, dragFrom, draggingId, onDragStart, onDragEnd, onDrop, onA
       }}
       aria-label={`${meta.label} column`}
     >
-      <div className="flex items-center gap-2 px-2 pb-2 pt-1.5">
+      <HoverCard
+        width={228}
+        side="top"
+        content={
+          <>
+            <HoverTitle sub={meta.hint}>{meta.label}</HoverTitle>
+            <div className="border-t pt-2 divider">
+              <DetailRows
+                rows={[
+                  ["Leads", num(col.count)],
+                  [col.status === "WON" ? "Order value" : "Total value", inr(col.value ?? 0)],
+                  col.count > 0 && ["Average", inr(Math.round((col.value ?? 0) / col.count))],
+                  col.count > col.leads.length && ["Shown here", `${num(col.leads.length)} of ${num(col.count)}`],
+                ]}
+              />
+            </div>
+          </>
+        }
+      >
+      <div className="flex w-full items-center gap-2 px-2 pb-2 pt-1.5">
         <StageDot status={col.status} size={8} />
         <span className="text-[13px] font-medium">{meta.label}</span>
         <AnimatedNumber value={col.count} format={(n) => num(Math.round(n))} duration={0.5} className="num muted rounded-md px-1.5 text-[11.5px] font-medium" style={{ background: "var(--surface-3)" }} />
         <AnimatedNumber value={col.value ?? 0} format={inrCompact} duration={0.6} className="num muted ml-auto text-[12px] font-medium" />
       </div>
+      </HoverCard>
       <div className="flex min-h-[120px] flex-col gap-2">
         {col.leads.length === 0 && (
           <div className="muted flex flex-1 items-center justify-center rounded-[10px] border border-dashed px-3 py-8 text-center text-xs" style={{ borderColor: "var(--border-strong)" }}>
@@ -466,13 +532,45 @@ const ListView = ({ filters }: { filters: LeadFilters }): JSX.Element => {
                 {rows.map((l, i) => (
                   <tr key={l.id} className="row-link row-in" style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }} onClick={() => navigate(`/leads/${l.id}`)}>
                     <td className="td">
-                      <Link to={`/leads/${l.id}`} className="font-semibold hover:underline" onClick={(e) => e.stopPropagation()}>
-                        {l.customer.company ?? l.customer.customerName}
-                      </Link>
-                      <div className="muted text-xs">{[l.customer.company ? l.customer.customerName : null, l.customer.city].filter(Boolean).join(", ")}</div>
+                      <HoverCard
+                        width={266}
+                        side="right"
+                        delay={220}
+                        content={
+                          <LeadPreview
+                            status={l.status}
+                            card={{
+                              id: l.id,
+                              customer: l.customer.company ?? l.customer.customerName,
+                              contact: l.customer.customerName,
+                              city: l.customer.city,
+                              approxValue: l.approxValue,
+                              finalValue: l.finalValue,
+                              priority: l.priority,
+                              productCount: l.productCount,
+                              owner: l.owner,
+                              source: l.source,
+                              nextFollowUp: l.nextFollowUp,
+                              createdAt: l.createdAt,
+                              updatedAt: l.updatedAt,
+                            }}
+                          />
+                        }
+                      >
+                        <span className="inline-block">
+                          <Link to={`/leads/${l.id}`} className="font-semibold hover:underline" onClick={(e) => e.stopPropagation()}>
+                            {l.customer.company ?? l.customer.customerName}
+                          </Link>
+                          <div className="muted text-xs">{[l.customer.company ? l.customer.customerName : null, l.customer.city].filter(Boolean).join(", ")}</div>
+                        </span>
+                      </HoverCard>
                     </td>
                     <td className="td"><StageBadge status={l.status} /></td>
-                    <td className="td num text-right font-medium">{inr(l.finalValue ?? l.approxValue)}</td>
+                    <td className="td num text-right font-medium">
+                      <Tooltip content={l.finalValue != null ? "Final order value" : "Approximate deal value, before negotiation"}>
+                        <span className="cursor-help">{inr(l.finalValue ?? l.approxValue)}</span>
+                      </Tooltip>
+                    </td>
                     <td className="td"><PriorityBadge priority={l.priority} /></td>
                     <td className="td">
                       {l.owner ? (
@@ -483,7 +581,7 @@ const ListView = ({ filters }: { filters: LeadFilters }): JSX.Element => {
                     </td>
                     <td className="td">{l.nextFollowUp && !isTerminal(l.status) ? <FollowUpTag at={l.nextFollowUp} /> : <span className="muted">None</span>}</td>
                     <td className="td text-2">{l.source}</td>
-                    <td className="td muted num text-right text-xs">{shortDate(l.updatedAt)}</td>
+                    <td className="td muted num text-right text-xs"><DateHint value={l.updatedAt}>{shortDate(l.updatedAt)}</DateHint></td>
                   </tr>
                 ))}
               </tbody>

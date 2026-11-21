@@ -5,6 +5,8 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AnimatedNumber } from "../../components/ui/AnimatedNumber";
+import { DetailRows, HoverCard, HoverTitle, Tooltip } from "../../components/ui/HoverCard";
+import { DateHint } from "../../components/ui/Figure";
 import { easeOut } from "../../lib/motion";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
@@ -22,7 +24,7 @@ import { useLeadSources, useTeam } from "../../hooks/useMeta";
 import { apiError, assetUrl } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { downloadFile } from "../../lib/download";
-import { dateTime, dayDiff, inr, phoneDigits, relativeDate, shortDate, timeAgo, timeOnly, toDateInput } from "../../lib/format";
+import { dateTime, dayDiff, fullDateTime, inr, num, phoneDigits, relativeDate, shortDate, timeAgo, timeOnly, toDateInput } from "../../lib/format";
 import { useDocumentTitle } from "../../lib/hooks";
 import { isTerminal, nextForwardStages, OPEN_ORDER, STAGE_META, stageLabel } from "../../lib/stages";
 import type { LeadDetail, LeadStatus, Priority } from "../../types";
@@ -64,12 +66,29 @@ const StageTrack = ({ lead, onMove, busy }: { lead: LeadDetail; onMove: (s: Lead
         const color = STAGE_META[s].color;
         return (
           <li key={s}>
+            <HoverCard
+              width={222}
+              side="bottom"
+              content={
+                <>
+                  <HoverTitle sub={STAGE_META[s].hint}>{stageLabel(s)}</HoverTitle>
+                  <div className="border-t pt-2 divider">
+                    <DetailRows
+                      rows={[
+                        ["Status", done && !current ? "Passed" : current ? "Current stage" : "Not reached"],
+                        reachedAt.has(s) ? ["Reached", fullDateTime(reachedAt.get(s))] : null,
+                      ]}
+                    />
+                  </div>
+                  {clickable && <div className="muted mt-2 text-[11px]">Click to move the lead here</div>}
+                </>
+              }
+            >
             <button
               type="button"
               disabled={!clickable}
               onClick={() => clickable && onMove(s)}
               className={cn("group w-full text-left", clickable && "cursor-pointer")}
-              title={clickable ? `Move to ${stageLabel(s).toLowerCase()}` : undefined}
             >
               <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "var(--surface-3)" }}>
                 <motion.div
@@ -92,6 +111,7 @@ const StageTrack = ({ lead, onMove, busy }: { lead: LeadDetail; onMove: (s: Lead
               </div>
               <div className="muted mt-0.5 hidden truncate text-[11px] sm:block">{reachedAt.has(s) ? shortDate(reachedAt.get(s)) : " "}</div>
             </button>
+            </HoverCard>
           </li>
         );
       })}
@@ -341,7 +361,7 @@ const FollowUpsSection = ({ lead }: { lead: LeadDetail }): JSX.Element => {
         <div className="min-w-0 flex-1">
           <div className={cn("text-sm", f.done && "muted line-through")}>{f.note || "Follow-up"}</div>
           <div className="text-xs" style={{ color: overdue ? "var(--danger)" : "var(--muted)" }}>
-            {relativeDate(f.dueAt)}, {timeOnly(f.dueAt)}{overdue ? " (overdue)" : ""}
+            <DateHint value={f.dueAt}>{`${relativeDate(f.dueAt)}, ${timeOnly(f.dueAt)}${overdue ? " (overdue)" : ""}`}</DateHint>
           </div>
         </div>
         <button className="btn btn-ghost btn-sm btn-icon opacity-0 group-hover:opacity-100 focus:opacity-100" onClick={() => removeFollowUp.mutate(f.id)} aria-label="Delete follow-up">
@@ -405,7 +425,7 @@ const Timeline = ({ lead }: { lead: LeadDetail }): JSX.Element => {
                 )}
               </div>
               {t.note && !["Lead created", "Marked won", "Marked lost"].includes(t.note) && <div className="text-2 mt-0.5 text-sm">"{t.note}"</div>}
-              <div className="muted mt-0.5 text-xs" title={dateTime(t.createdAt)}>{t.actor ? `${t.actor}, ` : ""}{timeAgo(t.createdAt)}</div>
+              <div className="muted mt-0.5 text-xs">{t.actor ? `${t.actor}, ` : ""}<DateHint value={t.createdAt} /></div>
             </div>
           </motion.li>
         ))}
@@ -495,10 +515,32 @@ const LeadDetailPage = (): JSX.Element => {
               {c && <Link to={`/customers/${c.id}`} className="inline-flex items-center gap-1 font-medium hover:underline" style={{ color: "var(--primary-text)" }}><Building2 className="h-3.5 w-3.5" /> Customer profile</Link>}
             </div>
           </div>
+          <HoverCard
+            width={236}
+            side="left"
+            content={
+              <>
+                <HoverTitle sub={lead.wonDeal ? "Final value on the purchase order" : "Estimate, before negotiation"}>
+                  {lead.wonDeal ? "Order value" : "Deal value"}
+                </HoverTitle>
+                <div className="border-t pt-2 divider">
+                  <DetailRows
+                    rows={[
+                      ["Exact", inr(value)],
+                      lead.products.length > 0 && ["Equipment total", inr(lead.products.reduce((s2, p) => s2 + p.lineTotal, 0))],
+                      lead.products.length > 0 && ["Line items", num(lead.products.length)],
+                      lead.wonDeal && lead.wonDeal.finalValue !== lead.approxValue ? ["Originally estimated", inr(lead.approxValue)] : null,
+                    ]}
+                  />
+                </div>
+              </>
+            }
+          >
           <div className="text-right">
             <div className="muted text-xs">{lead.wonDeal ? "Order value" : "Deal value"}</div>
             <AnimatedNumber value={value} format={(n) => inr(Math.round(n))} duration={1} className="condensed num block text-[32px] leading-tight" />
           </div>
+          </HoverCard>
         </div>
 
         <div className="mt-6"><StageTrack lead={lead} onMove={(s) => setMoveTo(s)} busy={mut.changeStatus.isPending} /></div>
@@ -600,8 +642,8 @@ const LeadDetailPage = (): JSX.Element => {
                 </dd>
               </div>
               <div className="flex justify-between gap-3"><dt className="muted">Source</dt><dd className="text-right">{lead.source?.name}{lead.sourceOther ? `, ${lead.sourceOther}` : ""}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="muted">Created</dt><dd>{shortDate(lead.createdAt)}</dd></div>
-              <div className="flex justify-between gap-3"><dt className="muted">Last updated</dt><dd>{timeAgo(lead.updatedAt)}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="muted">Created</dt><dd><DateHint value={lead.createdAt}>{shortDate(lead.createdAt)}</DateHint></dd></div>
+              <div className="flex justify-between gap-3"><dt className="muted">Last updated</dt><dd><DateHint value={lead.updatedAt} /></dd></div>
             </dl>
           </Section>
           {c && (

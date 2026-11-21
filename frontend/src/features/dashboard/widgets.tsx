@@ -7,11 +7,12 @@ import { StageDot } from "../../components/ui/Badges";
 import { Avatar } from "../../components/ui/Avatar";
 import { AnimatedNumber } from "../../components/ui/AnimatedNumber";
 import { Bar } from "../../components/ui/Bar";
-import { Tooltip } from "../../components/ui/Tooltip";
+import { DetailRows, HoverCard, HoverTitle, Tooltip } from "../../components/ui/HoverCard";
+import { DateHint } from "../../components/ui/Figure";
 import { useToast } from "../../components/ui/Toast";
 import { useLeadMutations } from "../../hooks/useLeads";
 import { apiError } from "../../lib/api";
-import { inr, inrCompact, num, relativeDate, timeAgo, timeOnly, dayDiff } from "../../lib/format";
+import { fullDateTime, inr, inrCompact, num, pctOf, relativeDate, timeAgo, timeOnly, dayDiff } from "../../lib/format";
 import { easeOut } from "../../lib/motion";
 import { BOARD_ORDER, STAGE_META, stageLabel } from "../../lib/stages";
 import type { AgendaFollowUp, DashboardOverview, LeadStatus } from "../../types";
@@ -54,6 +55,7 @@ interface Kpi {
   icon: LucideIcon;
   foot: ReactNode;
   help: string;
+  detail: ([ReactNode, ReactNode] | null | false | undefined)[];
   trend?: number[];
   tone?: string;
   to?: string;
@@ -88,9 +90,11 @@ const DeltaPill = ({ value, label }: { value: number | null; label: string }): J
 const pctFmt = (n: number) => `${(Math.round(n * 10) / 10).toString()}%`;
 const intFmt = (n: number) => num(Math.round(n));
 
-export const KpiCards = ({ data, compareLabel }: { data: DashboardOverview; periodLabel?: string; compareLabel: string | null }): JSX.Element => {
+export const KpiCards = ({ data, compareLabel, periodLabel = "this period" }: { data: DashboardOverview; periodLabel?: string; compareLabel: string | null }): JSX.Element => {
   const c = data.cards;
   const prev = data.previous;
+  const period = periodLabel.toLowerCase();
+  const closed = c.won + c.lost;
   const change = (cur: number, p?: number) => (prev && p !== undefined ? (p ? Math.round(((cur - p) / p) * 1000) / 10 : cur ? null : 0) : undefined);
   const revDelta = change(data.current.revenue, prev?.revenue);
   const leadDelta = change(data.current.newLeads, prev?.newLeads);
@@ -105,6 +109,13 @@ export const KpiCards = ({ data, compareLabel }: { data: DashboardOverview; peri
       help: "Value of deals closed in the selected period, by order date.",
       trend: data.trend.map((t) => t.revenue),
       foot: revDelta !== undefined && compareLabel ? <DeltaPill value={revDelta} label={compareLabel} /> : <span className="muted">{num(data.current.wonCount)} deals closed</span>,
+      detail: [
+        ["Exact", inr(data.current.revenue)],
+        ["Deals closed", num(data.current.wonCount)],
+        data.current.wonCount > 0 && ["Average deal", inr(Math.round(data.current.revenue / data.current.wonCount))],
+        prev && ["Previous period", inr(prev.revenue)],
+        prev && ["Change", `${data.current.revenue - prev.revenue >= 0 ? "+" : "−"}${inr(Math.abs(data.current.revenue - prev.revenue))}`],
+      ],
       to: "/leads?view=list&status=WON",
     },
     {
@@ -115,6 +126,13 @@ export const KpiCards = ({ data, compareLabel }: { data: DashboardOverview; peri
       icon: Layers,
       help: "Approximate value of every lead that is still open.",
       foot: <span className="muted">{num(c.openLeads)} open leads</span>,
+      detail: [
+        ["Exact", inr(c.pipelineValue)],
+        ["Open leads", num(c.openLeads)],
+        c.openLeads > 0 && ["Average size", inr(Math.round(c.pipelineValue / c.openLeads))],
+        ["Quote shared", `${num(c.quoteShared)} leads`],
+        ["Qualified", `${num(c.qualified)} leads`],
+      ],
       to: "/leads",
     },
     {
@@ -126,6 +144,13 @@ export const KpiCards = ({ data, compareLabel }: { data: DashboardOverview; peri
       help: "Leads created in the selected period.",
       trend: data.trend.map((t) => t.leads),
       foot: leadDelta !== undefined && compareLabel ? <DeltaPill value={leadDelta} label={compareLabel} /> : <span className="muted">{num(c.newCustomers)} new customers</span>,
+      detail: [
+        [`New leads, ${period}`, num(data.current.newLeads)],
+        ["New customers", num(c.newCustomers)],
+        prev && ["Previous period", num(prev.newLeads)],
+        ["Leads, all time", num(c.totalLeads)],
+        ["Customers, all time", num(c.totalCustomers)],
+      ],
       to: "/leads?view=list&sort=-createdAt",
     },
     {
@@ -136,6 +161,13 @@ export const KpiCards = ({ data, compareLabel }: { data: DashboardOverview; peri
       icon: Target,
       help: "Won deals as a share of all closed deals (won plus lost).",
       foot: <span className="muted">{num(c.won)} won, {num(c.lost)} lost{c.avgDealSize ? `, avg ${inrCompact(c.avgDealSize)}` : ""}</span>,
+      detail: [
+        ["Won", `${num(c.won)} (${pctOf(c.won, closed)})`],
+        ["Lost", `${num(c.lost)} (${pctOf(c.lost, closed)})`],
+        ["Closed in total", num(closed)],
+        ["Win to loss", `${c.winLossRatio} : 1`],
+        c.avgDealSize > 0 && ["Average won deal", inr(c.avgDealSize)],
+      ],
     },
     {
       key: "fu",
@@ -146,6 +178,12 @@ export const KpiCards = ({ data, compareLabel }: { data: DashboardOverview; peri
       help: "Follow-ups past their due date that aren't marked done.",
       tone: c.overdueFollowUps > 0 ? "var(--danger)" : undefined,
       foot: <span className="muted">{num(c.dueTodayFollowUps)} due today</span>,
+      detail: [
+        ["Overdue", num(c.overdueFollowUps)],
+        ["Due today", num(c.dueTodayFollowUps)],
+        data.overdueFollowUps[0] && ["Oldest overdue", `${data.overdueFollowUps[0].customer}, ${relativeDate(data.overdueFollowUps[0].dueAt).toLowerCase()}`],
+        data.upcomingFollowUps[0] && ["Next up", `${data.upcomingFollowUps[0].customer}, ${relativeDate(data.upcomingFollowUps[0].dueAt).toLowerCase()}`],
+      ],
       to: "/follow-ups?scope=overdue",
     },
   ];
@@ -178,14 +216,26 @@ export const KpiCards = ({ data, compareLabel }: { data: DashboardOverview; peri
             <div className="mt-3 truncate text-[12px]" title={k.key === "rev" || k.key === "leads" ? "Compared with the same point in the previous period" : undefined}>{k.foot}</div>
           </>
         );
-        const cls = cn("panel spotlight group block h-full p-4 transition-[border-color,box-shadow,transform] duration-200", k.to && "hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-sm)]");
+        const card = cn("panel spotlight group block h-full p-4 transition-[border-color,box-shadow,transform] duration-200", k.to && "hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-sm)]");
         return (
           <motion.div key={k.key} variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: easeOut } } }} className={cn("h-full", i === 4 && "col-span-2 md:col-span-1")}>
-            {k.to ? (
-              <Link to={k.to} className={cls} onMouseMove={trackSpotlight}>{body}</Link>
-            ) : (
-              <div className={cls} onMouseMove={trackSpotlight}>{body}</div>
-            )}
+            <HoverCard
+              width={248}
+              side="bottom"
+              content={
+                <>
+                  <HoverTitle sub={k.help}>{k.label}</HoverTitle>
+                  <div className="border-t pt-2 divider"><DetailRows rows={k.detail} /></div>
+                  {k.to && <div className="muted mt-2 text-[11px]">Click to open</div>}
+                </>
+              }
+            >
+              {k.to ? (
+                <Link to={k.to} className={card} onMouseMove={trackSpotlight}>{body}</Link>
+              ) : (
+                <div className={card} onMouseMove={trackSpotlight}>{body}</div>
+              )}
+            </HoverCard>
           </motion.div>
         );
       })}
@@ -220,7 +270,26 @@ export const TargetMeter = ({ target, isAdmin }: { target: DashboardOverview["ta
         <AnimatedNumber value={pctRaw} format={pctFmt} duration={1.2} className="condensed text-[40px] leading-none" />
         <span className="muted text-sm">of {inrCompact(target.monthly)}</span>
       </div>
-      <div className="relative mt-4" role="meter" aria-valuenow={pctRaw} aria-valuemin={0} aria-valuemax={100} aria-label="Monthly target progress">
+      <HoverCard
+        width={230}
+        content={
+          <>
+            <HoverTitle sub={`Day ${now.getDate()} of ${daysInMonth}`}>This month's target</HoverTitle>
+            <div className="border-t pt-2 divider">
+              <DetailRows
+                rows={[
+                  ["Closed so far", inr(target.achieved)],
+                  ["Target", inr(target.monthly)],
+                  ["Still to go", inr(Math.max(0, target.monthly - target.achieved))],
+                  ["Progress", `${pctRaw}%`],
+                  ["Expected by today", `${expected}%`],
+                ]}
+              />
+            </div>
+          </>
+        }
+      >
+      <div className="relative mt-4 w-full" role="meter" aria-valuenow={pctRaw} aria-valuemin={0} aria-valuemax={100} aria-label="Monthly target progress">
         <Bar pct={pctRaw} color={color} height={10} />
         <div className="absolute -top-1" style={{ left: `calc(${expected}% - 1px)` }}>
           <Tooltip content={`Where you should be by day ${now.getDate()}: ${expected}%`}>
@@ -234,6 +303,7 @@ export const TargetMeter = ({ target, isAdmin }: { target: DashboardOverview["ta
           </Tooltip>
         </div>
       </div>
+      </HoverCard>
       <div className="mt-3 flex justify-between text-xs">
         <span className="text-2">
           <span className="num font-semibold">{inr(target.achieved)}</span> closed
@@ -255,12 +325,34 @@ export const TargetMeter = ({ target, isAdmin }: { target: DashboardOverview["ta
 
 export const StageBreakdown = ({ stages }: { stages: DashboardOverview["stageCounts"] }): JSX.Element => {
   const max = Math.max(1, ...stages.map((s) => s.value));
+  const totalValue = stages.reduce((sum, s) => sum + s.value, 0);
+  const totalCount = stages.reduce((sum, s) => sum + s.count, 0);
   return (
     <ul className="space-y-3">
       {BOARD_ORDER.map((status, i) => {
         const s = stages.find((x) => x.status === status) ?? { status, count: 0, value: 0 };
         return (
           <li key={status}>
+            <HoverCard
+              width={232}
+              side="right"
+              content={
+                <>
+                  <HoverTitle sub={STAGE_META[status].hint}>{stageLabel(status)}</HoverTitle>
+                  <div className="border-t pt-2 divider">
+                    <DetailRows
+                      rows={[
+                        ["Leads", `${num(s.count)} (${pctOf(s.count, totalCount)})`],
+                        [status === "WON" ? "Order value" : "Value", inr(s.value)],
+                        ["Share of value", pctOf(s.value, totalValue)],
+                        s.count > 0 && ["Average", inr(Math.round(s.value / s.count))],
+                      ]}
+                    />
+                  </div>
+                  <div className="muted mt-2 text-[11px]">Click to list these leads</div>
+                </>
+              }
+            >
             <Link to={`/leads?view=list&status=${status}`} className="group -mx-2 block rounded-lg px-2 py-1 transition-colors hover:bg-[var(--surface-2)]">
               <div className="mb-1.5 flex items-center gap-2 text-[13px]">
                 <StageDot status={status} />
@@ -271,6 +363,7 @@ export const StageBreakdown = ({ stages }: { stages: DashboardOverview["stageCou
               </div>
               <Bar pct={(s.value / max) * 100} color={STAGE_META[status].color} delay={i * 0.06} minPct={2} />
             </Link>
+            </HoverCard>
           </li>
         );
       })}
@@ -288,12 +381,34 @@ export const Funnel = ({ data }: { data: { status: LeadStatus; count: number }[]
           const conv = prev ? Math.round((d.count / prev) * 100) : null;
           return (
             <li key={d.status}>
+              <HoverCard
+                width={238}
+                side="right"
+                content={
+                  <>
+                    <HoverTitle sub={`Leads that reached ${stageLabel(d.status).toLowerCase()}`}>{stageLabel(d.status)}</HoverTitle>
+                    <div className="border-t pt-2 divider">
+                      <DetailRows
+                        rows={[
+                          ["Reached", num(d.count)],
+                          prev !== null && ["From previous stage", `${conv}%`],
+                          prev !== null && ["Dropped off", `${num(prev - d.count)} leads`],
+                          i > 0 && ["Of all leads", pctOf(d.count, top)],
+                        ]}
+                      />
+                    </div>
+                  </>
+                }
+              >
+              <div className="w-full">
               <div className="mb-1.5 flex items-baseline gap-2 text-[13px]">
                 <span className="text-2">{stageLabel(d.status)}</span>
                 <span className="num ml-auto font-medium">{num(d.count)}</span>
                 <span className="num muted w-10 text-right text-xs">{conv !== null ? `${conv}%` : ""}</span>
               </div>
               <Bar pct={(d.count / top) * 100} color="var(--primary)" opacity={1 - i * 0.14} delay={i * 0.08} minPct={2} />
+              </div>
+              </HoverCard>
             </li>
           );
         })}
@@ -333,6 +448,25 @@ const AgendaRow = ({ f, overdue, onDone }: { f: AgendaFollowUp; overdue?: boolea
           </AnimatePresence>
         </button>
       </Tooltip>
+      <HoverCard
+        width={250}
+        side="left"
+        content={
+          <>
+            <HoverTitle sub={f.contact && f.contact !== f.customer ? f.contact : undefined}>{f.customer}</HoverTitle>
+            <div className="border-t pt-2 divider">
+              <DetailRows
+                rows={[
+                  ["Due", fullDateTime(f.dueAt)],
+                  [overdue ? "Overdue by" : "Due in", overdue ? `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"}` : d === 0 ? "Today" : `${d} day${d === 1 ? "" : "s"}`],
+                  f.note ? ["Note", <span className="font-normal">{f.note}</span>] : null,
+                ]}
+              />
+            </div>
+            <div className="muted mt-2 text-[11px]">Tick the circle to mark it done, or click to open the lead</div>
+          </>
+        }
+      >
       <Link to={`/leads/${f.leadId}`} className="flex min-w-0 flex-1 items-center gap-3">
         <div className="min-w-0 flex-1">
           <div className={cn("truncate text-[13px] font-medium transition-colors", checking && "muted line-through")}>{f.customer}</div>
@@ -343,6 +477,7 @@ const AgendaRow = ({ f, overdue, onDone }: { f: AgendaFollowUp; overdue?: boolea
           <div className="muted">{timeOnly(f.dueAt)}</div>
         </div>
       </Link>
+      </HoverCard>
     </motion.li>
   );
 };
@@ -419,9 +554,31 @@ export const SourceTable = ({ rows }: { rows: DashboardOverview["sourceBreakdown
       </thead>
       <tbody>
         {rows.slice(0, 7).map((r, i) => (
-          <tr key={r.id} className="group border-t divider">
+          <tr key={r.id} className="group border-t transition-colors divider hover:bg-[var(--surface-2)]">
             <td className="py-2 pr-3">
-              <Link to={`/leads?view=list&sourceId=${r.id}`} className="block max-w-[130px] truncate font-medium hover:underline" title={r.name}>{r.name}</Link>
+              <HoverCard
+                width={236}
+                side="right"
+                content={
+                  <>
+                    <HoverTitle sub="Lead source">{r.name}</HoverTitle>
+                    <div className="border-t pt-2 divider">
+                      <DetailRows
+                        rows={[
+                          ["Leads", num(r.leads)],
+                          ["Won", `${num(r.won)} (${r.winRate}%)`],
+                          ["Revenue", inr(r.revenue)],
+                          r.won > 0 && ["Average deal", inr(Math.round(r.revenue / r.won))],
+                          ["Share of leads", pctOf(r.leads, rows.reduce((s2, x) => s2 + x.leads, 0))],
+                        ]}
+                      />
+                    </div>
+                    <div className="muted mt-2 text-[11px]">Click to list these leads</div>
+                  </>
+                }
+              >
+                <Link to={`/leads?view=list&sourceId=${r.id}`} className="block max-w-[130px] truncate font-medium hover:underline" title={r.name}>{r.name}</Link>
+              </HoverCard>
             </td>
             <td className="w-[26%] py-2 pr-2">
               <div className="flex items-center gap-2">
@@ -445,7 +602,28 @@ export const TopCustomers = ({ rows }: { rows: DashboardOverview["topCustomers"]
     <ol className="space-y-1">
       {rows.map((r, i) => (
         <li key={r.customerId}>
-          <Link to={`/customers/${r.customerId}`} className="group -mx-2 flex items-start gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-[var(--surface-2)]">
+          <HoverCard
+            width={240}
+            side="right"
+            content={
+              <>
+                <HoverTitle sub={[r.company ? r.name : null, r.city].filter(Boolean).join(", ") || undefined}>{r.company ?? r.name}</HoverTitle>
+                <div className="border-t pt-2 divider">
+                  <DetailRows
+                    rows={[
+                      ["Revenue", inr(r.revenue)],
+                      ["Deals won", num(r.deals)],
+                      ["Average deal", inr(Math.round(r.revenue / Math.max(1, r.deals)))],
+                      ["Rank", `#${i + 1}`],
+                      ["Share of top", pctOf(r.revenue, rows.reduce((s2, x) => s2 + x.revenue, 0))],
+                    ]}
+                  />
+                </div>
+                <div className="muted mt-2 text-[11px]">Click to open the customer</div>
+              </>
+            }
+          >
+          <Link to={`/customers/${r.customerId}`} className="group -mx-2 flex w-full items-start gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-[var(--surface-2)]">
             <span className="num muted mt-0.5 w-4 text-xs font-semibold">{i + 1}</span>
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">
@@ -456,6 +634,7 @@ export const TopCustomers = ({ rows }: { rows: DashboardOverview["topCustomers"]
               <div className="muted mt-1 truncate text-xs">{[r.company ? r.name : null, r.city, `${r.deals} deal${r.deals === 1 ? "" : "s"}`].filter(Boolean).join(", ")}</div>
             </div>
           </Link>
+          </HoverCard>
         </li>
       ))}
     </ol>
@@ -468,10 +647,25 @@ export const LostReasons = ({ rows }: { rows: DashboardOverview["lostReasons"] }
   return (
     <ul className="space-y-2.5">
       {rows.map((r, i) => (
-        <li key={r.reason} className="flex items-center gap-3 text-[13px]">
-          <span className="text-2 min-w-0 flex-1 truncate" title={r.reason}>{r.reason}</span>
-          <div className="w-20"><Bar pct={(r.count / total) * 100} color="var(--st-lost)" height={6} delay={i * 0.06} /></div>
-          <span className="num w-8 text-right font-medium">{r.count}</span>
+        <li key={r.reason}>
+          <HoverCard
+            width={226}
+            side="right"
+            content={
+              <>
+                <HoverTitle sub="Reason given when the deal was lost">{r.reason}</HoverTitle>
+                <div className="border-t pt-2 divider">
+                  <DetailRows rows={[["Deals lost", num(r.count)], ["Share of losses", pctOf(r.count, total)], ["All losses", num(total)]]} />
+                </div>
+              </>
+            }
+          >
+            <span className="flex w-full items-center gap-3 text-[13px]">
+              <span className="text-2 min-w-0 flex-1 truncate">{r.reason}</span>
+              <span className="w-20"><Bar pct={(r.count / total) * 100} color="var(--st-lost)" height={6} delay={i * 0.06} /></span>
+              <span className="num w-8 text-right font-medium">{r.count}</span>
+            </span>
+          </HoverCard>
         </li>
       ))}
     </ul>
@@ -501,10 +695,32 @@ export const TeamBoard = ({ rows }: { rows: DashboardOverview["team"] }): JSX.El
             transition={{ delay: i * 0.06 }}
           >
             <td className="px-5 py-2.5">
-              <Link to={`/leads?view=list&ownerId=${r.id}`} className="flex items-center gap-2.5 hover:underline">
-                <Avatar name={r.name} size={26} />
-                <span className="font-medium">{r.name}</span>
-              </Link>
+              <HoverCard
+                width={234}
+                side="right"
+                content={
+                  <>
+                    <HoverTitle sub="Leads owned in this period">{r.name}</HoverTitle>
+                    <div className="border-t pt-2 divider">
+                      <DetailRows
+                        rows={[
+                          ["Open leads", num(r.open)],
+                          ["Open pipeline", inr(r.pipeline)],
+                          ["Deals won", num(r.won)],
+                          ["Revenue", inr(r.revenue)],
+                          ["Win rate", `${r.winRate}%`],
+                        ]}
+                      />
+                    </div>
+                    <div className="muted mt-2 text-[11px]">Click to list their leads</div>
+                  </>
+                }
+              >
+                <Link to={`/leads?view=list&ownerId=${r.id}`} className="flex items-center gap-2.5 hover:underline">
+                  <Avatar name={r.name} size={26} />
+                  <span className="font-medium">{r.name}</span>
+                </Link>
+              </HoverCard>
             </td>
             <td className="num py-2.5 text-right">{r.open}</td>
             <td className="num py-2.5 text-right">{inrCompact(r.pipeline)}</td>
@@ -547,7 +763,7 @@ export const ActivityFeed = ({ rows: all }: { rows: DashboardOverview["recentAct
             </div>
             <div className="muted text-xs">
               {a.actor ? `${a.actor}, ` : ""}
-              {timeAgo(a.at)}
+              <DateHint value={a.at} />
             </div>
           </Link>
         </motion.li>

@@ -107,3 +107,11 @@ export const greeting = (): string => {
   if (h < 17) return "Good afternoon";
   return "Good evening";
 };
+
+// "22 Nov 2026, 11:46 pm" plus the weekday, for exact-time hovers.
+export const fullDateTime = (value?: string | Date | null): string =>
+  value
+    ? new Date(value).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })
+    : "";
+
+export const pctOf = (part: number, whole: number): string => (whole ? `${Math.round((part / whole) * 1000) / 10}%` : "0%");

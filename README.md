@@ -23,6 +23,10 @@ The interface follows the calm, neutral style of today's most respected work too
 - Shortcuts: `N` new lead, `G` then `D`/`P`/`F`/`C`/`O`/`R`/`S` to jump between pages, `?` to list them all, `Ctrl/Cmd+K` to search.
 - Everything respects the reduced-motion accessibility setting.
 
+## Hover for exact detail
+
+Compact figures are there for scanning; the precise numbers are one hover away. Resting the pointer on a KPI card, a stage bar, a funnel step, a source, a customer, the target meter, a date or a lead card opens a panel with the exact amounts and the figures behind them. Lead cards show a full preview — owner, source, equipment, quotations, next follow-up and how long the lead has been idle — without opening it.
+
 ## Features
 
 **Dashboard**

@@ -1,4 +1,5 @@
 import type { LeadStatus, Priority } from "../../types";
+import { Tooltip } from "./HoverCard";
 import { PRIORITY_META, STAGE_META } from "../../lib/stages";
 
 export const StageDot = ({ status, size = 8 }: { status: LeadStatus; size?: number }): JSX.Element => (
@@ -8,22 +9,32 @@ export const StageDot = ({ status, size = 8 }: { status: LeadStatus; size?: numb
 export const StageBadge = ({ status }: { status: LeadStatus }): JSX.Element => {
   const meta = STAGE_META[status];
   return (
-    <span
-      className="pill"
-      style={{ background: `color-mix(in srgb, ${meta.color} 14%, transparent)`, color: "var(--text)" }}
-    >
-      <StageDot status={status} size={7} />
-      {meta.label}
-    </span>
+    <Tooltip content={meta.hint}>
+      <span
+        className="pill cursor-help"
+        style={{ background: `color-mix(in srgb, ${meta.color} 14%, transparent)`, color: "var(--text)" }}
+      >
+        <StageDot status={status} size={7} />
+        {meta.label}
+      </span>
+    </Tooltip>
   );
+};
+
+const PRIORITY_HINT: Record<Priority, string> = {
+  HIGH: "High priority: chase this one first",
+  MEDIUM: "Medium priority: normal follow-up",
+  LOW: "Low priority: keep warm",
 };
 
 export const PriorityBadge = ({ priority }: { priority: Priority }): JSX.Element => {
   const meta = PRIORITY_META[priority];
   return (
-    <span className="pill" style={{ background: meta.bg, color: meta.color }}>
-      {meta.label}
-    </span>
+    <Tooltip content={PRIORITY_HINT[priority]}>
+      <span className="pill cursor-help" style={{ background: meta.bg, color: meta.color }}>
+        {meta.label}
+      </span>
+    </Tooltip>
   );
 };
 

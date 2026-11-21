@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.3.0 (November 2026)
+
+### Hover for the exact detail
+- Every compact figure now reveals its exact amount on hover. `₹8.6 Cr` opens a panel showing `₹8,60,00,000` with the numbers behind it.
+- **Dashboard KPI cards** show exact revenue, deals closed, average deal size and the previous period's figure side by side.
+- **Pipeline stage bars** show the lead count, exact value, share of the pipeline and average deal.
+- **Funnel steps** show how many reached that stage, conversion from the one above, and how many dropped off.
+- **Lead sources, top customers, lost reasons and the team table** all show exact revenue and shares.
+- **The target meter** shows closed, target, remaining and where you should be today.
+- **Pipeline cards and list rows** show a full lead preview: stage, priority, exact value, owner, source, equipment, quotations, next follow-up, when it was opened and how long it has been idle.
+- **Dates** everywhere show the exact day and time; **stage and priority badges** explain what they mean.
+- Hover panels are rendered above the page, so they are never cut off inside a scrolling column, and they open on keyboard focus too. They do not appear on touch devices or while dragging a card.
+
 ## 2.2.0 (November 2026)
 
 ### Motion and interactivity

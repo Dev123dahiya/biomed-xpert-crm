@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { Segmented, Tabs } from "../../components/ui/Segmented";
+import { DetailRows, HoverCard, HoverTitle, Tooltip } from "../../components/ui/HoverCard";
 import { easeOut } from "../../lib/motion";
 import { Link } from "react-router-dom";
 import { Avatar } from "../../components/ui/Avatar";
@@ -15,7 +16,7 @@ import { useFollowUps, type FollowUpScope } from "../../hooks/useFollowUps";
 import { useLeadMutations } from "../../hooks/useLeads";
 import { apiError } from "../../lib/api";
 import { cn } from "../../lib/cn";
-import { dayDiff, inrCompact, phoneDigits, relativeDate, shortDate, timeOnly } from "../../lib/format";
+import { dayDiff, fullDateTime, inr, inrCompact, phoneDigits, relativeDate, shortDate, timeOnly } from "../../lib/format";
 import type { FollowUpRow } from "../../types";
 
 const SCOPES: { id: FollowUpScope; label: string }[] = [
@@ -61,13 +62,41 @@ const Row = ({ f, onLeave, onReturn, index }: { f: FollowUpRow; onLeave: (id: st
         className="flex w-[74px] shrink-0 flex-col text-xs leading-tight"
         style={{ color: overdue ? "var(--danger)" : d === 0 && !f.done ? "var(--primary-text)" : "var(--text-2)" }}
       >
-        <span className="font-semibold">{overdue ? `${Math.abs(d)}d overdue` : relativeDate(f.dueAt)}</span>
+        <Tooltip content={fullDateTime(f.dueAt)}>
+          <span className="cursor-help font-semibold">{overdue ? `${Math.abs(d)}d overdue` : relativeDate(f.dueAt)}</span>
+        </Tooltip>
         <span className="muted">{d < -6 || d > 6 ? shortDate(f.dueAt) : timeOnly(f.dueAt)}</span>
       </div>
+      <HoverCard
+        width={254}
+        side="right"
+        delay={200}
+        content={
+          <>
+            <HoverTitle sub={[c.customerName !== (c.company ?? c.customerName) ? c.customerName : null, c.city].filter(Boolean).join(", ") || undefined}>
+              {c.company ?? c.customerName}
+            </HoverTitle>
+            <div className="border-t pt-2 divider">
+              <DetailRows
+                rows={[
+                  ["Due", fullDateTime(f.dueAt)],
+                  [overdue ? "Overdue by" : "Due in", overdue ? `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"}` : d === 0 ? "Today" : `${d} day${d === 1 ? "" : "s"}`],
+                  f.note ? ["Note", <span className="font-normal">{f.note}</span>] : null,
+                  ["Deal value", inr(f.lead.approxValue)],
+                  f.lead.owner ? ["Owner", f.lead.owner.name] : null,
+                  c.phone ? ["Phone", c.phone] : null,
+                ]}
+              />
+            </div>
+            <div className="muted mt-2 text-[11px]">Click to open the lead</div>
+          </>
+        }
+      >
       <Link to={`/leads/${f.lead.id}`} className="min-w-0 flex-1 basis-56">
         <div className={cn("truncate text-sm font-semibold hover:underline", f.done && "muted line-through")}>{c.company ?? c.customerName}</div>
         <div className="text-2 truncate text-sm">{f.note || <span className="muted">No note</span>}</div>
       </Link>
+      </HoverCard>
       <div className="flex items-center gap-3">
         <StageBadge status={f.lead.status} />
         <span className="num hidden w-16 text-right text-sm font-medium md:inline">{inrCompact(f.lead.approxValue)}</span>
