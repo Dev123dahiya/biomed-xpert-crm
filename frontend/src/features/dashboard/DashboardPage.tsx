@@ -1,8 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useDashboard } from "../../hooks/useDashboard";
-import { RevenueTrend } from "../../components/charts/RevenueTrend";
+import { RevenueTrend, type TrendMetric } from "../../components/charts/RevenueTrend";
+import { Segmented } from "../../components/ui/Segmented";
+import { num } from "../../lib/format";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { ErrorNote, Skeleton } from "../../components/ui/States";
 import { greeting, inrCompact } from "../../lib/format";
@@ -68,6 +70,7 @@ const DashboardPage = (): JSX.Element => {
   const meta = PERIODS.find((p) => p.key === period)!;
   const range = useMemo(() => rangeFor(period), [period]);
   const { data, isLoading, isError, refetch, isFetching } = useDashboard(range);
+  const [metric, setMetric] = useState<TrendMetric>("revenue");
 
   const firstName = user?.name?.split(" ")[0] ?? "";
   const today = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
@@ -92,17 +95,13 @@ const DashboardPage = (): JSX.Element => {
           )
         }
         actions={
-          <div className="seg max-w-full overflow-x-auto" role="group" aria-label="Period">
-            {PERIODS.map((p) => (
-              <button
-                key={p.key}
-                aria-pressed={p.key === period}
-                onClick={() => setParams(p.key === "month" ? {} : { period: p.key }, { replace: true })}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Period"
+            className="max-w-full overflow-x-auto"
+            value={period}
+            onChange={(k) => setParams(k === "month" ? {} : { period: k }, { replace: true })}
+            options={PERIODS.map((p) => ({ value: p.key, label: p.label }))}
+          />
         }
       />
 
@@ -117,13 +116,26 @@ const DashboardPage = (): JSX.Element => {
           <div className="grid gap-4 lg:grid-cols-3 xl:gap-5">
             <Panel
               className="lg:col-span-2"
-              title="Revenue closed"
-              sub={`Last 12 months, ${inrCompact(data.trend.reduce((s, t) => s + t.revenue, 0))} in total`}
+              title={metric === "revenue" ? "Revenue closed" : metric === "deals" ? "Deals won" : "New leads"}
+              sub={`Last 12 months, ${
+                metric === "revenue"
+                  ? `${inrCompact(data.trend.reduce((s, t) => s + t.revenue, 0))} in total`
+                  : `${num(data.trend.reduce((s, t) => s + (metric === "deals" ? t.deals : t.leads), 0))} in total`
+              }`}
               bodyClass="pl-2 pr-4"
+              action={
+                <Segmented
+                  label="Chart metric"
+                  size="sm"
+                  value={metric}
+                  onChange={setMetric}
+                  options={[{ value: "revenue", label: "Revenue" }, { value: "deals", label: "Deals" }, { value: "leads", label: "Leads" }]}
+                />
+              }
             >
-              <RevenueTrend data={data.trend} target={data.target.monthly || undefined} />
+              <RevenueTrend data={data.trend} target={data.target.monthly || undefined} metric={metric} />
             </Panel>
-            <Panel title="This month's target" sub={new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}>
+            <Panel index={1} title="This month's target" sub={new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" })}>
               <TargetMeter target={data.target} isAdmin={isAdmin} />
             </Panel>
           </div>
@@ -132,10 +144,10 @@ const DashboardPage = (): JSX.Element => {
             <Panel title="Pipeline by stage" sub="Approximate value of leads in each stage" action={<Link to="/leads" className="btn btn-ghost btn-sm">Open board</Link>}>
               <StageBreakdown stages={data.stageCounts} />
             </Panel>
-            <Panel title="Conversion funnel" sub={meta.key === "all" ? "All leads" : `Leads created ${meta.label.toLowerCase()}`}>
+            <Panel index={1} title="Conversion funnel" sub={meta.key === "all" ? "All leads" : `Leads created ${meta.label.toLowerCase()}`}>
               <Funnel data={data.funnel} />
             </Panel>
-            <Panel title="Follow-ups" sub="Overdue first, then what's next" action={<Link to="/follow-ups" className="btn btn-ghost btn-sm">See all</Link>} bodyClass="pt-2">
+            <Panel index={2} title="Follow-ups" sub="Tick one off right here, or open the lead" action={<Link to="/follow-ups" className="btn btn-ghost btn-sm">See all</Link>} bodyClass="pt-2">
               <Agenda overdue={data.overdueFollowUps} upcoming={data.upcomingFollowUps} />
             </Panel>
           </div>
@@ -144,10 +156,10 @@ const DashboardPage = (): JSX.Element => {
             <Panel title="Lead sources" sub="Where leads come from and how they convert">
               <SourceTable rows={data.sourceBreakdown} />
             </Panel>
-            <Panel title="Top customers" sub={`By revenue, ${meta.label.toLowerCase()}`}>
+            <Panel index={1} title="Top customers" sub={`By revenue, ${meta.label.toLowerCase()}`}>
               <TopCustomers rows={data.topCustomers} />
             </Panel>
-            <Panel title="Why deals are lost" sub={meta.label}>
+            <Panel index={2} title="Why deals are lost" sub={meta.label}>
               <LostReasons rows={data.lostReasons} />
             </Panel>
           </div>
@@ -158,7 +170,7 @@ const DashboardPage = (): JSX.Element => {
                 <TeamBoard rows={data.team} />
               </Panel>
             )}
-            <Panel className={data.team.length > 0 ? "lg:col-span-2" : "lg:col-span-5"} title="Recent activity" sub="Stage changes across the team">
+            <Panel index={1} className={data.team.length > 0 ? "lg:col-span-2" : "lg:col-span-5"} title="Recent activity" sub="Stage changes across the team">
               <ActivityFeed rows={data.recentActivity} />
             </Panel>
           </div>

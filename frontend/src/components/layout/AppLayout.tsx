@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { motion } from "motion/react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useLocalState } from "../../lib/hooks";
 import { SlideOver } from "../ui/Modal";
@@ -7,6 +8,8 @@ import { CommandPalette } from "./CommandPalette";
 import { CreateProvider } from "./CreateContext";
 import { Sidebar, SidebarContent } from "./Sidebar";
 import { Topbar } from "./Topbar";
+import { ShortcutsLayer } from "./Shortcuts";
+import { easeOut } from "../../lib/motion";
 
 export const PageFallback = (): JSX.Element => (
   <div className="flex min-h-[40vh] items-center justify-center">
@@ -20,6 +23,7 @@ export const AppLayout = (): JSX.Element => {
   const [collapsed, setCollapsed] = useLocalState("bmx-sidebar-collapsed", false);
   const [mobileNav, setMobileNav] = useState(false);
   const [palette, setPalette] = useState(false);
+  const [help, setHelp] = useState(false);
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
 
@@ -65,20 +69,27 @@ export const AppLayout = (): JSX.Element => {
             style={{ background: "var(--surface)", borderColor: "var(--border)", boxShadow: "var(--shadow-sm)" }}
           >
             <Topbar onMenu={() => setMobileNav(true)} onSearch={openPalette} onToggleSidebar={() => setCollapsed(!collapsed)} />
-            <main id="main" ref={mainRef} className="scroll-thin flex-1 lg:overflow-y-auto">
-              <div className="mx-auto w-full max-w-[1440px] px-3 py-5 sm:px-5 lg:px-7 lg:py-6">
+            <motion.main layoutScroll id="main" ref={mainRef} className="scroll-thin flex-1 lg:overflow-y-auto">
+              <motion.div
+                key={location.pathname}
+                className="mx-auto w-full max-w-[1440px] px-3 py-5 sm:px-5 lg:px-7 lg:py-6"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, ease: easeOut }}
+              >
                 <Suspense fallback={<PageFallback />}>
                   <Outlet />
                 </Suspense>
-              </div>
-            </main>
+              </motion.div>
+            </motion.main>
           </div>
         </div>
       </div>
       <SlideOver open={mobileNav} title="Navigation" onClose={closeNav} side="left" width={272} bare>
         <SidebarContent onNavigate={closeNav} onSearch={openPalette} />
       </SlideOver>
-      <CommandPalette open={palette} onClose={closePalette} />
+      <CommandPalette open={palette} onClose={closePalette} onShortcuts={() => setHelp(true)} />
+      <ShortcutsLayer helpOpen={help} setHelpOpen={setHelp} />
     </CreateProvider>
   );
 };

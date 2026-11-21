@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 
 export type ThemeChoice = "light" | "dark" | "system";
 interface ThemeState { choice: ThemeChoice; dark: boolean; setChoice: (c: ThemeChoice) => void; toggle: () => void; }
@@ -28,18 +29,47 @@ export const ThemeProvider = ({ children }: { children: ReactNode }): JSX.Elemen
   }, []);
 
   const dark = choice === "dark" || (choice === "system" && sysDark);
+  const pointer = useRef({ x: window.innerWidth - 40, y: 40 });
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
+  // Remember where the user last clicked, so the theme can spread out from there.
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => { pointer.current = { x: e.clientX, y: e.clientY }; };
+    window.addEventListener("pointerdown", onDown, { passive: true });
+    return () => window.removeEventListener("pointerdown", onDown);
+  }, []);
+
   const setChoice = useCallback((c: ThemeChoice) => {
-    setChoiceState(c);
+    const nextDark = c === "dark" || (c === "system" && systemDark());
+    const apply = () => {
+      flushSync(() => setChoiceState(c));
+      document.documentElement.classList.toggle("dark", nextDark);
+    };
     try {
       localStorage.setItem(KEY, c);
     } catch {
       /* storage can be unavailable in private mode */
     }
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => { ready: Promise<void> } };
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!doc.startViewTransition || reduce || nextDark === document.documentElement.classList.contains("dark")) {
+      apply();
+      return;
+    }
+    const { x, y } = pointer.current;
+    const r = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+    const t = doc.startViewTransition(apply);
+    t.ready
+      .then(() => {
+        document.documentElement.animate(
+          { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${r}px at ${x}px ${y}px)`] },
+          { duration: 520, easing: "cubic-bezier(0.4, 0, 0.2, 1)", pseudoElement: "::view-transition-new(root)" },
+        );
+      })
+      .catch(() => undefined);
   }, []);
   const toggle = useCallback(() => setChoice(dark ? "light" : "dark"), [dark, setChoice]);
 

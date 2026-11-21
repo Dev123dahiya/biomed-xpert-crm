@@ -1,6 +1,8 @@
 import { Building2, Check, KeyRound, Monitor, Moon, Palette, Pencil, Plus, Radio, Sun, Trash2, UserPlus, Users, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { AnimatePresence, motion } from "motion/react";
+import { spring } from "../../lib/motion";
 import { useAuth } from "../../auth/AuthContext";
 import { Avatar } from "../../components/ui/Avatar";
 import { RoleBadge } from "../../components/ui/Badges";
@@ -315,11 +317,11 @@ const SettingsPage = (): JSX.Element => {
             <button
               key={t.id}
               onClick={() => setParams(t.id === "org" ? {} : { tab: t.id }, { replace: true })}
-              className={cn("menu-item shrink-0 whitespace-nowrap", tab === t.id && "font-semibold")}
-              data-active={tab === t.id}
+              className={cn("menu-item relative shrink-0 whitespace-nowrap !bg-transparent hover:!bg-[var(--surface-2)]", tab === t.id && "font-medium")}
               aria-current={tab === t.id ? "page" : undefined}
             >
-              <t.icon className="h-4 w-4" /> {t.label}
+              {tab === t.id && <motion.span layoutId="settings-pill" className="absolute inset-0 rounded-[7px]" style={{ background: "var(--surface-3)" }} transition={spring} />}
+              <t.icon className="relative h-4 w-4" /> <span className="relative">{t.label}</span>
             </button>
           ))}
           {isAdmin && (
@@ -330,10 +332,14 @@ const SettingsPage = (): JSX.Element => {
           )}
         </nav>
         <div className="min-w-0">
-          {tab === "org" && <OrganisationTab isAdmin={isAdmin} />}
-          {tab === "team" && isAdmin && <TeamTab />}
-          {tab === "sources" && <SourcesTab isAdmin={isAdmin} />}
-          {tab === "appearance" && <AppearanceTab />}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.18 }}>
+              {tab === "org" && <OrganisationTab isAdmin={isAdmin} />}
+              {tab === "team" && isAdmin && <TeamTab />}
+              {tab === "sources" && <SourcesTab isAdmin={isAdmin} />}
+              {tab === "appearance" && <AppearanceTab />}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </div>

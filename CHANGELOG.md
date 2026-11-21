@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.2.0 (November 2026)
+
+### Motion and interactivity
+- Animated counters on dashboard KPIs, the target meter, column totals and lead values. KPI cards stagger in, sparklines draw themselves, and every bar grows into place.
+- Revenue chart switcher (revenue, deals won, new leads) and sliding segmented controls and tabs across the app.
+- Tick off follow-ups straight from the dashboard agenda and the follow-ups page. They leave the list right away and come back if the save fails.
+- Pipeline: cards move immediately and glide to their new column, a quick "move forward" button appears on hover, column totals count, and drop zones spring up while you drag.
+- Confetti when a deal is marked won.
+- Dialogs, drawers, menus, the command palette and toasts animate in and out. Toasts show a timer and can be swiped away.
+- Sliding active highlight in the sidebar, settings and command palette. Page transitions, a cursor spotlight on KPI cards, and button press feedback.
+- Circular reveal when switching between light and dark themes, a bell shake for new notifications, and a 3D tilt on the sign-in preview.
+- Keyboard shortcuts: N for a new lead, G then D/P/F/C/O/R/S to jump between pages, ? for the list, and Ctrl or Cmd plus K for search.
+- Respects the operating system's reduced-motion setting, which shows final values with no movement.
+- Vendor code split into long-lived chunks so deploys download less.
+
 ## 2.1.0 (November 2026)
 
 ### Interface redesign

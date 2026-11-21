@@ -137,8 +137,8 @@ const CustomersPage = (): JSX.Element => {
                 <SkeletonRows rows={8} cols={6} />
               ) : (
                 <tbody>
-                  {rows.map((c) => (
-                    <tr key={c.id} className="row-link" onClick={() => navigate(`/customers/${c.id}`)}>
+                  {rows.map((c, i) => (
+                    <tr key={c.id} className="row-link row-in" style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }} onClick={() => navigate(`/customers/${c.id}`)}>
                       <td className="td">
                         <div className="flex items-center gap-3">
                           <Avatar name={c.company ?? c.customerName} size={32} />

@@ -15,6 +15,14 @@ The interface follows the calm, neutral style of today's most respected work too
 - Every dashboard number comes with a trend or a target, and the board leads with the pipeline (the HubSpot and Pipedrive pattern).
 - Light, dark and match-device themes.
 
+## Motion and shortcuts
+
+- Numbers count up, charts and bars grow in, and sparklines draw themselves. Dialogs, menus and toasts animate in and out.
+- Pipeline cards glide to their new column the moment you drop them, and winning a deal sets off confetti.
+- Sliding highlights for the active page, tabs and segmented controls, plus a circular reveal when you change theme.
+- Shortcuts: `N` new lead, `G` then `D`/`P`/`F`/`C`/`O`/`R`/`S` to jump between pages, `?` to list them all, `Ctrl/Cmd+K` to search.
+- Everything respects the reduced-motion accessibility setting.
+
 ## Features
 
 **Dashboard**

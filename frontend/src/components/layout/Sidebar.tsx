@@ -1,5 +1,8 @@
 import { ChevronsUpDown, LogOut, Monitor, Moon, Search, Settings, Sun, User } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { motion } from "motion/react";
+import { spring } from "../../lib/motion";
+import { Segmented } from "../ui/Segmented";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../auth/AuthContext";
 import { api } from "../../lib/api";
@@ -65,12 +68,8 @@ const AccountMenu = ({ collapsed }: { collapsed: boolean }): JSX.Element => {
             {user?.role && <RoleBadge role={user.role} />}
           </div>
           <div className="my-1.5 border-t divider" />
-          <div className="seg mx-1 mb-1 flex">
-            {themes.map((t) => (
-              <button key={t.id} aria-pressed={choice === t.id} onClick={() => setChoice(t.id)} className="flex flex-1 items-center justify-center gap-1.5">
-                {t.icon} {t.label}
-              </button>
-            ))}
+          <div className="mx-1 mb-1">
+            <Segmented label="Theme" stretch value={choice} onChange={setChoice} options={themes.map((t) => ({ value: t.id, label: t.label, icon: t.icon }))} />
           </div>
           <div className="my-1.5 border-t divider" />
           <button className="menu-item" onClick={() => { close(); navigate("/profile"); }}><User /> Profile and password</button>
@@ -127,16 +126,21 @@ export const SidebarContent = ({ collapsed = false, onNavigate, onSearch }: { co
                   title={collapsed ? it.label : undefined}
                   className={({ isActive }) => cn("side-link", isActive && "active", collapsed && "justify-center px-0")}
                 >
-                  <it.icon />
-                  {!collapsed && <span className="flex-1">{it.label}</span>}
+                  {({ isActive }) => (
+                    <>
+                  {isActive && <motion.span layoutId={collapsed ? "nav-pill-c" : "nav-pill"} className="nav-pill" transition={spring} />}
+                  <it.icon className="relative" />
+                  {!collapsed && <span className="relative flex-1">{it.label}</span>}
                   {it.to === "/follow-ups" && overdue > 0 && (
                     <span
-                      className={cn("num rounded-md text-[10.5px] font-semibold", collapsed ? "absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full" : "px-1.5 py-px")}
+                      className={cn("num relative rounded-md text-[10.5px] font-semibold", collapsed ? "!absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full" : "px-1.5 py-px")}
                       style={{ background: collapsed ? "var(--danger)" : "var(--danger-soft)", color: "var(--danger)" }}
                       aria-label={`${overdue} overdue`}
                     >
                       {!collapsed && overdue}
                     </span>
+                  )}
+                    </>
                   )}
                 </NavLink>
               ))}

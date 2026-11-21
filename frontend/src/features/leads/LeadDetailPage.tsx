@@ -3,6 +3,9 @@ import {
   MessageCircle, MoreHorizontal, Pencil, Phone, Trash2, Trophy, Upload, XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { AnimatedNumber } from "../../components/ui/AnimatedNumber";
+import { easeOut } from "../../lib/motion";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { Avatar } from "../../components/ui/Avatar";
@@ -27,13 +30,19 @@ import { linesTotal, ProductLinesEditor, type Line } from "./ProductLines";
 import { LostForm, WonForm } from "./WonLostForms";
 
 const Section = ({ title, action, children, className }: { title: string; action?: React.ReactNode; children: React.ReactNode; className?: string }): JSX.Element => (
-  <section className={cn("panel", className)}>
+  <motion.section
+    className={cn("panel", className)}
+    initial={{ opacity: 0, y: 8 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true, margin: "0px 0px -30px 0px" }}
+    transition={{ duration: 0.4, ease: easeOut }}
+  >
     <header className="flex items-center justify-between gap-3 border-b px-5 py-3.5 divider">
       <h2 className="section-title">{title}</h2>
       {action}
     </header>
     <div className="p-5">{children}</div>
-  </section>
+  </motion.section>
 );
 
 /* ---------------------------------------------------------------- */
@@ -62,7 +71,15 @@ const StageTrack = ({ lead, onMove, busy }: { lead: LeadDetail; onMove: (s: Lead
               className={cn("group w-full text-left", clickable && "cursor-pointer")}
               title={clickable ? `Move to ${stageLabel(s).toLowerCase()}` : undefined}
             >
-              <div className="h-1.5 rounded-full transition-colors" style={{ background: done || current ? color : "var(--surface-3)" }} />
+              <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "var(--surface-3)" }}>
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ background: color, transformOrigin: "left" }}
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: done || current ? 1 : 0 }}
+                  transition={{ duration: 0.55, ease: easeOut, delay: i * 0.09 }}
+                />
+              </div>
               <div className="mt-2 flex items-center gap-1.5">
                 {done && !current ? (
                   <Check className="h-3.5 w-3.5 shrink-0" style={{ color }} />
@@ -306,7 +323,14 @@ const FollowUpsSection = ({ lead }: { lead: LeadDetail }): JSX.Element => {
   const Row = ({ f }: { f: LeadDetail["followUps"][number] }) => {
     const overdue = !f.done && dayDiff(f.dueAt) < 0;
     return (
-      <li className="group flex items-start gap-2.5 py-2">
+      <motion.li
+        layout
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, height: 0, transition: { duration: 0.2 } }}
+        transition={{ duration: 0.25, ease: easeOut }}
+        className="group flex items-start gap-2.5 overflow-hidden py-2"
+      >
         <button
           className="mt-0.5"
           onClick={() => updateFollowUp.mutate({ followUpId: f.id, done: !f.done }, { onSuccess: () => toast(f.done ? "Marked as not done" : "Follow-up done") })}
@@ -323,14 +347,16 @@ const FollowUpsSection = ({ lead }: { lead: LeadDetail }): JSX.Element => {
         <button className="btn btn-ghost btn-sm btn-icon opacity-0 group-hover:opacity-100 focus:opacity-100" onClick={() => removeFollowUp.mutate(f.id)} aria-label="Delete follow-up">
           <Trash2 className="h-3.5 w-3.5" />
         </button>
-      </li>
+      </motion.li>
     );
   };
 
   return (
     <Section title="Follow-ups">
       {lead.followUps.length === 0 && <p className="muted mb-3 text-sm">Nothing scheduled.</p>}
-      {open.length > 0 && <ul className="-mt-2 mb-2">{open.map((f) => <Row key={f.id} f={f} />)}</ul>}
+      <ul className={open.length ? "-mt-2 mb-2" : undefined}>
+        <AnimatePresence initial={false}>{open.map((f) => <Row key={f.id} f={f} />)}</AnimatePresence>
+      </ul>
       {allowed ? (
         <form onSubmit={add} className="inset space-y-2 p-3">
           <Input className="h-9" placeholder="Call to confirm demo date" value={note} onChange={(e) => setNote(e.target.value)} aria-label="Follow-up note" />
@@ -348,7 +374,7 @@ const FollowUpsSection = ({ lead }: { lead: LeadDetail }): JSX.Element => {
       {done.length > 0 && (
         <details className="mt-3">
           <summary className="muted cursor-pointer text-xs font-medium">{done.length} completed</summary>
-          <ul className="mt-1">{done.map((f) => <Row key={f.id} f={f} />)}</ul>
+          <ul className="mt-1"><AnimatePresence initial={false}>{done.map((f) => <Row key={f.id} f={f} />)}</AnimatePresence></ul>
         </details>
       )}
     </Section>
@@ -361,7 +387,13 @@ const Timeline = ({ lead }: { lead: LeadDetail }): JSX.Element => {
     <Section title="History">
       <ol className="relative">
         {items.map((t, i) => (
-          <li key={t.id} className="relative flex gap-3 pb-5 last:pb-0">
+          <motion.li
+            key={t.id}
+            className="relative flex gap-3 pb-5 last:pb-0"
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: Math.min(i, 10) * 0.05, duration: 0.3, ease: easeOut }}
+          >
             {i < items.length - 1 && <span className="absolute left-[5px] top-4 h-full w-px" style={{ background: "var(--border)" }} aria-hidden />}
             <span className="relative mt-1.5"><StageDot status={t.toStatus} size={11} /></span>
             <div className="min-w-0 flex-1">
@@ -375,7 +407,7 @@ const Timeline = ({ lead }: { lead: LeadDetail }): JSX.Element => {
               {t.note && !["Lead created", "Marked won", "Marked lost"].includes(t.note) && <div className="text-2 mt-0.5 text-sm">"{t.note}"</div>}
               <div className="muted mt-0.5 text-xs" title={dateTime(t.createdAt)}>{t.actor ? `${t.actor}, ` : ""}{timeAgo(t.createdAt)}</div>
             </div>
-          </li>
+          </motion.li>
         ))}
       </ol>
     </Section>
@@ -465,7 +497,7 @@ const LeadDetailPage = (): JSX.Element => {
           </div>
           <div className="text-right">
             <div className="muted text-xs">{lead.wonDeal ? "Order value" : "Deal value"}</div>
-            <div className="condensed num text-[34px] font-semibold leading-tight">{inr(value)}</div>
+            <AnimatedNumber value={value} format={(n) => inr(Math.round(n))} duration={1} className="condensed num block text-[32px] leading-tight" />
           </div>
         </div>
 

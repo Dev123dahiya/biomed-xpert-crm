@@ -98,8 +98,8 @@ const ProductsPage = (): JSX.Element => {
                 <SkeletonRows rows={8} cols={5} />
               ) : (
                 <tbody>
-                  {rows.map((p) => (
-                    <tr key={p.id}>
+                  {rows.map((p, i) => (
+                    <tr key={p.id} className="row-in transition-colors hover:bg-[var(--surface-2)]" style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }}>
                       <td className="td">
                         <button className="text-left font-semibold hover:underline" onClick={() => setEditing(p)}>{p.name}</button>
                         {p.description && <div className="muted line-clamp-1 max-w-sm text-xs">{p.description}</div>}

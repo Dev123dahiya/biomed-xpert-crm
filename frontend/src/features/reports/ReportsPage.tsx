@@ -1,5 +1,7 @@
 import { BarChart3, CalendarRange, FileSpreadsheet, FileText, Receipt, Sheet, Target, Users } from "lucide-react";
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { Segmented } from "../../components/ui/Segmented";
 import { Combobox, type ComboOption } from "../../components/ui/Combobox";
 import { Field, Input, Select } from "../../components/ui/Field";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -89,22 +91,28 @@ const ReportsPage = (): JSX.Element => {
       <section className="panel mb-5 flex flex-wrap items-end gap-4 p-4 sm:p-5">
         <div>
           <div className="label">Date range</div>
-          <div className="seg flex-wrap" role="group" aria-label="Date range">
-            {PRESETS.map((p) => <button key={p.id} aria-pressed={preset === p.id} onClick={() => setPreset(p.id)}>{p.label}</button>)}
-          </div>
+          <Segmented label="Date range" className="flex-wrap" value={preset} onChange={setPreset} options={PRESETS.map((p) => ({ value: p.id, label: p.label }))} />
         </div>
-        {preset === "custom" && (
-          <>
-            <Field label="From" htmlFor="r-from"><Input id="r-from" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className="h-9" /></Field>
-            <Field label="To" htmlFor="r-to"><Input id="r-to" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className="h-9" /></Field>
-          </>
-        )}
+        <AnimatePresence initial={false}>
+          {preset === "custom" && (
+            <motion.div className="flex flex-wrap items-end gap-4" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.2 }}>
+              <Field label="From" htmlFor="r-from"><Input id="r-from" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className="h-9" /></Field>
+              <Field label="To" htmlFor="r-to"><Input id="r-to" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className="h-9" /></Field>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <p className="muted basis-full text-xs">The range applies to every report except the monthly summary, which covers a calendar year.</p>
       </section>
 
       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {REPORTS.map((r) => (
-          <section key={r.key} className="panel flex flex-col p-5">
+          <motion.section
+            key={r.key}
+            className="panel flex flex-col p-5 transition-[border-color,box-shadow] hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-sm)]"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: REPORTS.indexOf(r) * 0.05, duration: 0.35 }}
+          >
             <div className="flex items-start gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]" style={{ background: "var(--primary-soft)", color: "var(--primary-text)" }}>
                 <r.icon className="h-5 w-5" />
@@ -115,10 +123,7 @@ const ReportsPage = (): JSX.Element => {
               </div>
             </div>
             {"extra" in r && r.extra === "groupBy" && (
-              <div className="seg mt-4 self-start" role="group" aria-label="Group revenue by">
-                <button aria-pressed={groupBy === "month"} onClick={() => setGroupBy("month")}>By month</button>
-                <button aria-pressed={groupBy === "customer"} onClick={() => setGroupBy("customer")}>By customer</button>
-              </div>
+              <Segmented label="Group revenue by" className="mt-4 self-start" value={groupBy} onChange={setGroupBy} options={[{ value: "month", label: "By month" }, { value: "customer", label: "By customer" }]} />
             )}
             {"extra" in r && r.extra === "year" && (
               <Select className="mt-4 h-9 w-32" value={year} onChange={(e) => setYear(e.target.value)} aria-label="Year">
@@ -136,7 +141,7 @@ const ReportsPage = (): JSX.Element => {
                 );
               })}
             </div>
-          </section>
+          </motion.section>
         ))}
       </div>
 

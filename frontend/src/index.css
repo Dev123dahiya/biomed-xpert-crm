@@ -52,6 +52,7 @@
 
   --chart-grid: #efeeec;
   --chart-axis: #8a8884;
+  --seg-thumb: #ffffff;
 
   color-scheme: light;
 }
@@ -99,6 +100,7 @@ html.dark {
 
   --chart-grid: #232325;
   --chart-axis: #7d7d84;
+  --seg-thumb: #38383c;
 
   color-scheme: dark;
 }
@@ -205,6 +207,8 @@ html.dark {
     user-select: none;
   }
   .btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+  .btn:active:not(:disabled), .chip:active, .seg > button:active { transform: scale(0.97); }
+  .btn, .chip, .seg > button { transition-property: background-color, border-color, color, box-shadow, transform; transition-duration: 0.12s; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn svg { width: 15px; height: 15px; }
   .btn-sm { height: 1.875rem; padding: 0 0.6rem; font-size: 0.78rem; border-radius: 7px; }
@@ -348,8 +352,10 @@ html.dark {
   }
   .side-link svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.85; }
   .side-link:hover { background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text); }
-  .side-link.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
-  html.dark .side-link.active { background: var(--surface-3); box-shadow: none; }
+  .side-link.active { color: var(--text); }
+  .side-link.active:hover { background: transparent; }
+  .nav-pill { position: absolute; inset: 0; border-radius: 7px; background: var(--surface); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
+  html.dark .nav-pill { background: var(--surface-3); box-shadow: none; }
   .side-link.active svg { opacity: 1; color: var(--primary); }
 
   .menu-item {
@@ -393,6 +399,8 @@ html.dark {
     white-space: nowrap;
   }
   .tab:hover { color: var(--text); }
+  .tab-motion[aria-selected="true"]::after { display: none; }
+  .seg > button[aria-checked="true"] { color: var(--text); }
   .tab[aria-selected="true"] { color: var(--text); }
   .tab[aria-selected="true"]::after {
     content: "";
@@ -416,6 +424,23 @@ html.dark {
   .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
   .scroll-thin::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
 
+  /* Cursor-following highlight on interactive cards (Linear/Vercel style) */
+  .spotlight { position: relative; isolation: isolate; }
+  .spotlight::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(320px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--primary) 9%, transparent), transparent 65%);
+    opacity: 0;
+    transition: opacity 0.25s;
+    z-index: -1;
+    pointer-events: none;
+  }
+  .spotlight:hover::before { opacity: 1; }
+
+  .row-in > .td { animation: row-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: inherit; }
+
   .drop-ok { outline: 2px dashed var(--primary); outline-offset: -2px; background: var(--primary-soft) !important; }
   .drop-no { opacity: 0.45; }
 }
@@ -426,12 +451,18 @@ html.dark {
 @keyframes slide-in-right { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes slide-in-left { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes row-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes bell { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(14deg); } 40% { transform: rotate(-12deg); } 60% { transform: rotate(8deg); } 80% { transform: rotate(-4deg); } }
+.bell-ring { animation: bell 0.7s ease-in-out; transform-origin: 50% 10%; }
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 .anim-pop { animation: pop-in 0.16s ease-out; }
 .anim-right { animation: slide-in-right 0.2s ease-out; }
 .anim-left { animation: slide-in-left 0.2s ease-out; }
 .anim-fade { animation: fade-in 0.15s ease-out; }
 .anim-rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s both; }
+
+/* Theme switch: a circular reveal from the click point (View Transitions API) */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

@@ -1,5 +1,6 @@
 import { UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Controller, useForm } from "react-hook-form";
 import { useAuth } from "../../auth/AuthContext";
 import { apiError } from "../../lib/api";
@@ -9,6 +10,7 @@ import { customerOption, searchCustomers } from "../../components/ui/pickers";
 import { Field, Input, MoneyInput, Select, Textarea } from "../../components/ui/Field";
 import { Modal } from "../../components/ui/Modal";
 import { Spinner } from "../../components/ui/Spinner";
+import { Segmented } from "../../components/ui/Segmented";
 import { useToast } from "../../components/ui/Toast";
 import { useLeadSources, useTeam } from "../../hooks/useMeta";
 import { useLeadMutations } from "../../hooks/useLeads";
@@ -133,11 +135,15 @@ export const LeadForm = ({ onDone, initialCustomer }: { onDone: (id?: string) =>
         </Field>
       </div>
 
-      {showOther && (
-        <Field label="Describe the source" error={errors.sourceOther?.message} htmlFor="lead-source-other">
-          <Input id="lead-source-other" placeholder="For example, CME at AIIMS" {...register("sourceOther", { required: "Describe the source when choosing Others" })} />
-        </Field>
-      )}
+      <AnimatePresence initial={false}>
+        {showOther && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+            <Field label="Describe the source" error={errors.sourceOther?.message} htmlFor="lead-source-other" className="p-px">
+              <Input id="lead-source-other" placeholder="For example, CME at AIIMS" {...register("sourceOther", { required: "Describe the source when choosing Others" })} />
+            </Field>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div>
         <div className="label">Equipment of interest</div>
@@ -165,13 +171,7 @@ export const LeadForm = ({ onDone, initialCustomer }: { onDone: (id?: string) =>
           name="priority"
           control={control}
           render={({ field }) => (
-            <div className="seg" role="radiogroup" aria-label="Priority">
-              {PRIORITIES.map((p) => (
-                <button key={p.id} type="button" role="radio" aria-checked={field.value === p.id} aria-pressed={field.value === p.id} onClick={() => field.onChange(p.id)} className="min-w-[72px]">
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <Segmented label="Priority" value={field.value} onChange={field.onChange} options={PRIORITIES.map((p) => ({ value: p.id, label: <span className="inline-block min-w-[52px]">{p.label}</span> }))} />
           )}
         />
       </div>
@@ -183,15 +183,21 @@ export const LeadForm = ({ onDone, initialCustomer }: { onDone: (id?: string) =>
       <fieldset className="inset p-4" disabled={!followUpEnabled}>
         <legend className="sr-only">First follow-up</legend>
         <div className="mb-3 text-sm font-semibold">First follow-up</div>
-        {followUpEnabled ? (
-          <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
-            <Input type="date" aria-label="Follow-up date" {...register("followUpDate")} />
-            <Input type="time" aria-label="Follow-up time" {...register("followUpTime")} />
-            <Input className="sm:col-span-2" placeholder="What's the follow-up about?" aria-label="Follow-up note" {...register("followUpNote")} />
-          </div>
-        ) : (
-          <p className="muted text-sm">Follow-ups open up once the lead is past New. Change the stage above to schedule one.</p>
-        )}
+        <AnimatePresence initial={false} mode="wait">
+          {followUpEnabled ? (
+            <motion.div key="on" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden">
+              <div className="grid gap-3 p-px sm:grid-cols-[1fr_130px]">
+                <Input type="date" aria-label="Follow-up date" {...register("followUpDate")} />
+                <Input type="time" aria-label="Follow-up time" {...register("followUpTime")} />
+                <Input className="sm:col-span-2" placeholder="What's the follow-up about?" aria-label="Follow-up note" {...register("followUpNote")} />
+              </div>
+            </motion.div>
+          ) : (
+            <motion.p key="off" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="muted text-sm">
+              Follow-ups open up once the lead is past New. Change the stage above to schedule one.
+            </motion.p>
+          )}
+        </AnimatePresence>
       </fieldset>
 
       <div className="sticky bottom-0 -mx-5 -mb-5 flex gap-2 border-t px-5 py-4 divider" style={{ background: "var(--surface)" }}>

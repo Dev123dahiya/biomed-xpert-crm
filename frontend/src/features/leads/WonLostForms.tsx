@@ -7,6 +7,7 @@ import { Field, Input, MoneyInput, Textarea } from "../../components/ui/Field";
 import { Spinner } from "../../components/ui/Spinner";
 import { useToast } from "../../components/ui/Toast";
 import { useLeadMutations } from "../../hooks/useLeads";
+import { celebrate } from "../../lib/celebrate";
 import type { LeadProductLine, LostDeal, WonDeal } from "../../types";
 
 interface EquipLine { name: string; make: string; model: string; quantity: number; amount: number }
@@ -46,7 +47,10 @@ export const WonForm = ({ leadId, onDone, existing, leadProducts, suggestedValue
     };
     try {
       if (existing) await updateWon.mutateAsync(body);
-      else await markWon.mutateAsync(body);
+      else {
+        await markWon.mutateAsync(body);
+        celebrate();
+      }
       toast(existing ? "Won deal updated" : "Deal marked as won");
       onDone();
     } catch (err) {

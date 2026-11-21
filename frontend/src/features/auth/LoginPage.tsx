@@ -1,11 +1,15 @@
 import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
+import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
+import { easeOut } from "../../lib/motion";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { LogoMark, Wordmark } from "../../components/brand/Logo";
 import { Spinner } from "../../components/ui/Spinner";
 import { useDocumentTitle } from "../../lib/hooks";
 import { useTheme } from "../../lib/theme";
+
+const ITEM = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] as const } } };
 
 const POINTS = [
   "Drag-and-drop pipeline from enquiry to purchase order",
@@ -27,6 +31,17 @@ export const LoginPage = (): JSX.Element => {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [slow, setSlow] = useState(false);
+
+  // Gentle 3D tilt of the product preview that follows the pointer.
+  const mx = useMotionValue(0.5);
+  const my = useMotionValue(0.5);
+  const rotY = useSpring(useTransform(mx, [0, 1], [-5, 3]), { stiffness: 120, damping: 20 });
+  const rotX = useSpring(useTransform(my, [0, 1], [4, -3]), { stiffness: 120, damping: 20 });
+  const onTilt = (e: React.MouseEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    mx.set((e.clientX - r.left) / r.width);
+    my.set((e.clientY - r.top) / r.height);
+  };
 
   useEffect(() => {
     if (!submitting) return setSlow(false);
@@ -59,11 +74,18 @@ export const LoginPage = (): JSX.Element => {
         </div>
 
         <div className="flex flex-1 items-center justify-center py-12">
-          <form onSubmit={submit} className="w-full max-w-[360px]" noValidate>
-            <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.025em]">Welcome back</h1>
-            <p className="muted mt-1.5 text-sm">Sign in with the work account your admin created for you.</p>
+          <motion.form
+            onSubmit={submit}
+            className="w-full max-w-[360px]"
+            noValidate
+            initial="hidden"
+            animate="show"
+            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06, delayChildren: 0.05 } } }}
+          >
+            <motion.h1 variants={ITEM} className="text-[26px] font-semibold leading-tight tracking-[-0.025em]">Welcome back</motion.h1>
+            <motion.p variants={ITEM} className="muted mt-1.5 text-sm">Sign in with the work account your admin created for you.</motion.p>
 
-            <div className="mt-8 space-y-4">
+            <motion.div variants={ITEM} className="mt-8 space-y-4">
               <div>
                 <label className="label" htmlFor="email">Email</label>
                 <input
@@ -100,27 +122,29 @@ export const LoginPage = (): JSX.Element => {
                   </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {error && (
-              <p className="mt-4 rounded-lg border px-3 py-2.5 text-[13px]" style={{ background: "var(--danger-soft)", color: "var(--danger)", borderColor: "color-mix(in srgb, var(--danger) 25%, transparent)" }} role="alert">
+              <motion.p key={error} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: [0, -6, 6, -3, 0] }} transition={{ duration: 0.35 }} className="mt-4 rounded-lg border px-3 py-2.5 text-[13px]" style={{ background: "var(--danger-soft)", color: "var(--danger)", borderColor: "color-mix(in srgb, var(--danger) 25%, transparent)" }} role="alert">
                 {error}
-              </p>
+              </motion.p>
             )}
 
-            <button className="btn btn-primary btn-lg mt-6 w-full" disabled={submitting || !email || !password}>
-              {submitting && <Spinner />} Sign in
-            </button>
+            <motion.div variants={ITEM}>
+              <button className="btn btn-primary btn-lg mt-6 w-full" disabled={submitting || !email || !password}>
+                {submitting && <Spinner />} Sign in
+              </button>
+            </motion.div>
             {slow && <p className="muted mt-3 text-center text-xs">Waking up the server. This can take up to a minute after a quiet spell.</p>}
 
             <p className="muted mt-8 text-center text-xs">Forgot your password? Ask your admin to reset it from Settings, Team.</p>
-          </form>
+          </motion.form>
         </div>
 
         <p className="muted text-xs">© {new Date().getFullYear()} BIOMED XPERT</p>
       </section>
 
-      <section className="relative hidden p-3 lg:block">
+      <section className="relative hidden p-3 lg:block" onMouseMove={onTilt} onMouseLeave={() => { mx.set(0.5); my.set(0.5); }}>
         <div
           className="relative flex h-full flex-col overflow-hidden rounded-[18px] border"
           style={{
@@ -130,7 +154,7 @@ export const LoginPage = (): JSX.Element => {
               : "radial-gradient(900px 500px at 85% -10%, rgba(37,99,235,.13), transparent 60%), #f6f6f4",
           }}
         >
-          <div className="px-12 pt-14">
+          <motion.div className="px-12 pt-14" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: easeOut, delay: 0.1 }}>
             <h2 className="max-w-[520px] text-[34px] font-semibold leading-[1.12] tracking-[-0.03em]">
               The CRM built for biomedical equipment sales.
             </h2>
@@ -142,14 +166,14 @@ export const LoginPage = (): JSX.Element => {
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="anim-rise relative mt-12 flex-1">
-            <div
+          </motion.div>
+          <div className="anim-rise relative mt-12 flex-1" style={{ perspective: 1600 }}>
+            <motion.div
+              style={{ rotateX: rotX, rotateY: rotY, transformOrigin: "0% 0%", borderColor: "var(--border-strong)", boxShadow: "0 30px 80px -20px rgba(20,20,18,.28), 0 0 0 6px color-mix(in srgb, var(--surface) 55%, transparent)" }}
               className="absolute left-12 top-0 w-[1180px] overflow-hidden rounded-tl-[14px] border-l border-t"
-              style={{ borderColor: "var(--border-strong)", boxShadow: "0 30px 80px -20px rgba(20,20,18,.28), 0 0 0 6px color-mix(in srgb, var(--surface) 55%, transparent)" }}
             >
               <img src={dark ? "/preview-dark.webp" : "/preview-light.webp"} alt="BIOMED XPERT dashboard showing revenue, pipeline and follow-ups" className="block w-full" />
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>

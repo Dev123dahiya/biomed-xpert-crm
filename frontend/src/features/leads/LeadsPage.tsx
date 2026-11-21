@@ -1,5 +1,11 @@
-import { ArrowDown, ArrowUp, CalendarClock, Download, FileText, KanbanSquare, List, Package, Plus, Search, Trophy, X, XCircle } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, CalendarClock, Download, FileText, KanbanSquare, List, Package, Plus, Search, Trophy, X, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { AnimatePresence, LayoutGroup, motion } from "motion/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { AnimatedNumber } from "../../components/ui/AnimatedNumber";
+import { Segmented, Tabs } from "../../components/ui/Segmented";
+import { Tooltip } from "../../components/ui/Tooltip";
+import { spring } from "../../lib/motion";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useCreate } from "../../components/layout/CreateContext";
@@ -18,7 +24,7 @@ import { cn } from "../../lib/cn";
 import { downloadFile } from "../../lib/download";
 import { dayDiff, daysSince, inr, inrCompact, num, relativeDate, shortDate } from "../../lib/format";
 import { useDebounced } from "../../lib/hooks";
-import { BOARD_ORDER, canMoveTo, isTerminal, STAGE_META, stageLabel } from "../../lib/stages";
+import { BOARD_ORDER, canMoveTo, isTerminal, nextForwardStages, STAGE_META, stageLabel } from "../../lib/stages";
 import type { BoardCard, BoardColumn, LeadStatus } from "../../types";
 import { LostForm, WonForm } from "./WonLostForms";
 
@@ -98,49 +104,99 @@ const FollowUpTag = ({ at }: { at: string }): JSX.Element => {
   );
 };
 
-const LeadCard = ({ card, status, dragging, onDragStart, onDragEnd }: { card: BoardCard; status: LeadStatus; dragging: boolean; onDragStart: () => void; onDragEnd: () => void }): JSX.Element => {
+const LeadCard = ({ card, status, dragging, onDragStart, onDragEnd, onAdvance, onClose }: {
+  card: BoardCard;
+  status: LeadStatus;
+  dragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onAdvance: (to: LeadStatus) => void;
+  onClose: (to: "WON" | "LOST") => void;
+}): JSX.Element => {
   const terminal = isTerminal(status);
   const age = daysSince(card.updatedAt);
+  const next = nextForwardStages(status)[0];
   return (
-    <Link
-      to={`/leads/${card.id}`}
-      draggable={!terminal}
-      onDragStart={(e) => {
-        e.dataTransfer.setData("text/plain", card.id);
-        e.dataTransfer.effectAllowed = "move";
-        onDragStart();
-      }}
-      onDragEnd={onDragEnd}
-      className={cn("card block p-3 transition-[box-shadow,border-color] hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-sm)]", !terminal && "cursor-grab active:cursor-grabbing", dragging && "opacity-40")}
+    <motion.div
+      layout
+      layoutId={card.id}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: dragging ? 0.4 : 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
+      transition={spring}
+      className="group/card relative"
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium leading-snug">{card.customer ?? "Customer"}</div>
-          <div className="muted truncate text-xs">{[card.contact !== card.customer ? card.contact : null, card.city].filter(Boolean).join(", ") || card.source}</div>
+      <Link
+        to={`/leads/${card.id}`}
+        draggable={!terminal}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", card.id);
+          e.dataTransfer.effectAllowed = "move";
+          onDragStart();
+        }}
+        onDragEnd={onDragEnd}
+        className={cn(
+          "card block p-3 transition-[box-shadow,border-color,transform] duration-200 hover:-translate-y-px hover:border-[var(--border-strong)] hover:shadow-[0_6px_16px_-8px_rgba(20,20,18,.22)]",
+          !terminal && "cursor-grab active:cursor-grabbing",
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="truncate text-[13px] font-medium leading-snug">{card.customer ?? "Customer"}</div>
+            <div className="muted truncate text-xs">{[card.contact !== card.customer ? card.contact : null, card.city].filter(Boolean).join(", ") || card.source}</div>
+          </div>
+          {card.owner && <Avatar name={card.owner.name} size={22} />}
         </div>
-        {card.owner && <Avatar name={card.owner.name} size={22} />}
-      </div>
-      <div className="mt-2.5 flex items-baseline justify-between gap-2">
-        <span className="num text-[14px] font-semibold tracking-[-0.01em]">{inrCompact(card.finalValue ?? card.approxValue)}</span>
-        <PriorityBadge priority={card.priority} />
-      </div>
-      <div className="muted mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]">
-        {card.nextFollowUp && !terminal && <FollowUpTag at={card.nextFollowUp} />}
-        <span className="inline-flex items-center gap-1" title="Products"><Package className="h-3 w-3" />{card.productCount}</span>
-        {Boolean(card.quoteCount) && <span className="inline-flex items-center gap-1" title="Quotes"><FileText className="h-3 w-3" />{card.quoteCount}</span>}
-        {!terminal && age >= 7 && <span title="Days since last update" style={{ color: age >= 21 ? "var(--warning)" : undefined }}>{age}d idle</span>}
-      </div>
-    </Link>
+        <div className="mt-2.5 flex items-baseline justify-between gap-2">
+          <span className="num text-[14px] font-semibold tracking-[-0.01em]">{inrCompact(card.finalValue ?? card.approxValue)}</span>
+          <PriorityBadge priority={card.priority} />
+        </div>
+        <div className="muted mt-2.5 flex min-h-[20px] flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]">
+          {card.nextFollowUp && !terminal && <FollowUpTag at={card.nextFollowUp} />}
+          <span className="inline-flex items-center gap-1" title="Products"><Package className="h-3 w-3" />{card.productCount}</span>
+          {Boolean(card.quoteCount) && <span className="inline-flex items-center gap-1" title="Quotes"><FileText className="h-3 w-3" />{card.quoteCount}</span>}
+          {!terminal && age >= 7 && <span title="Days since last update" style={{ color: age >= 21 ? "var(--warning)" : undefined }}>{age}d idle</span>}
+        </div>
+      </Link>
+      {!terminal && (
+        <div className="pointer-events-none absolute bottom-2 right-2 flex translate-y-1 gap-1 opacity-0 transition-all duration-150 group-hover/card:pointer-events-auto group-hover/card:translate-y-0 group-hover/card:opacity-100">
+          {next ? (
+            <Tooltip content={`Move to ${stageLabel(next).toLowerCase()}`}>
+              <button
+                className="btn btn-sm h-6 gap-1 px-1.5 text-[11px]"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAdvance(next); }}
+                aria-label={`Move ${card.customer} to ${stageLabel(next)}`}
+              >
+                <StageDot status={next} size={6} /> <ArrowRight className="!h-3 !w-3" />
+              </button>
+            </Tooltip>
+          ) : (
+            <Tooltip content="Mark as won">
+              <button
+                className="btn btn-sm h-6 gap-1 px-1.5 text-[11px]"
+                style={{ color: "var(--success)" }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClose("WON"); }}
+                aria-label={`Mark ${card.customer} as won`}
+              >
+                <Trophy className="!h-3 !w-3" /> Won
+              </button>
+            </Tooltip>
+          )}
+        </div>
+      )}
+    </motion.div>
   );
 };
 
-const Column = ({ col, dragFrom, draggingId, onDragStart, onDragEnd, onDrop }: {
+const Column = ({ col, dragFrom, draggingId, onDragStart, onDragEnd, onDrop, onAdvance, onClose }: {
   col: BoardColumn;
   dragFrom: LeadStatus | null;
   draggingId: string | null;
   onDragStart: (id: string, s: LeadStatus) => void;
   onDragEnd: () => void;
   onDrop: (id: string, to: LeadStatus) => void;
+  onAdvance: (id: string, from: LeadStatus, to: LeadStatus) => void;
+  onClose: (card: BoardCard, to: "WON" | "LOST") => void;
 }): JSX.Element => {
   const meta = STAGE_META[col.status];
   const [over, setOver] = useState(false);
@@ -169,19 +225,29 @@ const Column = ({ col, dragFrom, draggingId, onDragStart, onDragEnd, onDrop }: {
       <div className="flex items-center gap-2 px-2 pb-2 pt-1.5">
         <StageDot status={col.status} size={8} />
         <span className="text-[13px] font-medium">{meta.label}</span>
-        <span className="num muted rounded-md px-1.5 text-[11.5px] font-medium" style={{ background: "var(--surface-3)" }}>{num(col.count)}</span>
-        <span className="num muted ml-auto text-[12px] font-medium">{inrCompact(col.value ?? 0)}</span>
+        <AnimatedNumber value={col.count} format={(n) => num(Math.round(n))} duration={0.5} className="num muted rounded-md px-1.5 text-[11.5px] font-medium" style={{ background: "var(--surface-3)" }} />
+        <AnimatedNumber value={col.value ?? 0} format={inrCompact} duration={0.6} className="num muted ml-auto text-[12px] font-medium" />
       </div>
       <div className="flex min-h-[120px] flex-col gap-2">
-        {col.leads.length === 0 ? (
+        {col.leads.length === 0 && (
           <div className="muted flex flex-1 items-center justify-center rounded-[10px] border border-dashed px-3 py-8 text-center text-xs" style={{ borderColor: "var(--border-strong)" }}>
             {dragFrom && allowed ? `Drop to move to ${meta.label.toLowerCase()}` : meta.hint}
           </div>
-        ) : (
-          col.leads.map((l) => (
-            <LeadCard key={l.id} card={l} status={col.status} dragging={draggingId === l.id} onDragStart={() => onDragStart(l.id, col.status)} onDragEnd={onDragEnd} />
-          ))
         )}
+        <AnimatePresence initial={false} mode="popLayout">
+          {col.leads.map((l) => (
+            <LeadCard
+              key={l.id}
+              card={l}
+              status={col.status}
+              dragging={draggingId === l.id}
+              onDragStart={() => onDragStart(l.id, col.status)}
+              onDragEnd={onDragEnd}
+              onAdvance={(to) => onAdvance(l.id, col.status, to)}
+              onClose={(to) => onClose(l, to)}
+            />
+          ))}
+        </AnimatePresence>
         {showLimit && (
           <Link to={`/leads?view=list&status=${col.status}`} className="btn btn-ghost btn-sm">
             View all {num(col.count)}
@@ -197,7 +263,9 @@ const Column = ({ col, dragFrom, draggingId, onDragStart, onDragEnd, onDrop }: {
 const CloseZones = ({ onDrop }: { onDrop: (to: "WON" | "LOST") => void }): JSX.Element => {
   const [over, setOver] = useState<"WON" | "LOST" | null>(null);
   const zone = (to: "WON" | "LOST", label: string, Icon: typeof Trophy) => (
-    <div
+    <motion.div
+      animate={{ scale: over === to ? 1.04 : 1 }}
+      transition={spring}
       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOver(to); }}
       onDragLeave={() => setOver(null)}
       onDrop={(e) => { e.preventDefault(); setOver(null); onDrop(to); }}
@@ -209,13 +277,19 @@ const CloseZones = ({ onDrop }: { onDrop: (to: "WON" | "LOST") => void }): JSX.E
       }}
     >
       <Icon className="h-4 w-4" style={{ color: STAGE_META[to].color }} /> {label}
-    </div>
+    </motion.div>
   );
   return (
-    <div className="pop anim-pop fixed inset-x-0 bottom-5 z-50 mx-auto flex w-[min(520px,calc(100vw-2rem))] gap-2.5 rounded-[14px] p-2">
+    <motion.div
+      className="pop fixed inset-x-0 bottom-5 z-50 mx-auto flex w-[min(520px,calc(100vw-2rem))] gap-2.5 rounded-[14px] p-2"
+      initial={{ opacity: 0, y: 24, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 16, transition: { duration: 0.15 } }}
+      transition={spring}
+    >
       {zone("WON", "Drop to mark won", Trophy)}
       {zone("LOST", "Drop to mark lost", XCircle)}
-    </div>
+    </motion.div>
   );
 };
 
@@ -223,6 +297,7 @@ const Board = ({ filters }: { filters: LeadFilters }): JSX.Element => {
   const { data, isLoading, isError, refetch } = useLeadBoard(filters);
   const { changeStatus } = useLeadMutations();
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [drag, setDrag] = useState<{ id: string; from: LeadStatus } | null>(null);
   const [closing, setClosing] = useState<{ id: string; to: "WON" | "LOST"; card: BoardCard } | null>(null);
 
@@ -237,10 +312,30 @@ const Board = ({ filters }: { filters: LeadFilters }): JSX.Element => {
       if (card) setClosing({ id, to, card });
       return;
     }
+    await advance(id, from, to);
+  };
+
+  // Move the card on screen first, then tell the server. A failed save puts it back.
+  const advance = async (id: string, from: LeadStatus, to: LeadStatus) => {
+    qc.setQueriesData<{ columns: BoardColumn[] }>({ queryKey: ["leads", "board"] }, (old) => {
+      if (!old) return old;
+      const card = old.columns.find((c) => c.status === from)?.leads.find((l) => l.id === id);
+      if (!card) return old;
+      return {
+        columns: old.columns.map((c) =>
+          c.status === from
+            ? { ...c, count: c.count - 1, value: (c.value ?? 0) - card.approxValue, leads: c.leads.filter((l) => l.id !== id) }
+            : c.status === to
+              ? { ...c, count: c.count + 1, value: (c.value ?? 0) + card.approxValue, leads: [{ ...card, updatedAt: new Date().toISOString() }, ...c.leads] }
+              : c,
+        ),
+      };
+    });
     try {
       await changeStatus.mutateAsync({ leadId: id, toStatus: to });
       toast(`Moved to ${stageLabel(to).toLowerCase()}`);
     } catch (err) {
+      qc.invalidateQueries({ queryKey: ["leads", "board"] });
       toast(apiError(err).message, "error");
     }
   };
@@ -249,7 +344,8 @@ const Board = ({ filters }: { filters: LeadFilters }): JSX.Element => {
 
   return (
     <>
-      <div className="scroll-thin -mx-3 snap-x overflow-x-auto px-3 pb-3 sm:-mx-5 sm:px-5 lg:-mx-7 lg:px-7">
+      <LayoutGroup>
+      <motion.div layoutScroll className="scroll-thin -mx-3 snap-x overflow-x-auto px-3 pb-3 sm:-mx-5 sm:px-5 lg:-mx-7 lg:px-7">
         <div className="flex min-w-max gap-3">
           {isLoading
             ? BOARD_ORDER.map((s) => <Skeleton key={s} className="h-[420px] w-[280px] rounded-[12px]" />)
@@ -262,10 +358,14 @@ const Board = ({ filters }: { filters: LeadFilters }): JSX.Element => {
                   onDragStart={(id, s) => setDrag({ id, from: s })}
                   onDragEnd={() => setDrag(null)}
                   onDrop={drop}
+                  onAdvance={advance}
+                  onClose={(card, to) => setClosing({ id: card.id, to, card })}
                 />
               ))}
         </div>
-      </div>
+      </motion.div>
+      </LayoutGroup>
+      <AnimatePresence>
       {drag && (
         <CloseZones
           onDrop={(to) => {
@@ -276,9 +376,8 @@ const Board = ({ filters }: { filters: LeadFilters }): JSX.Element => {
           }}
         />
       )}
-      {changeStatus.isPending && (
-        <div className="pop fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 px-4 py-2 text-sm"><Spinner /> Moving lead</div>
-      )}
+      </AnimatePresence>
+
       <Modal
         open={Boolean(closing)}
         title={closing?.to === "WON" ? `Mark ${closing.card.customer} as won` : `Mark ${closing?.card.customer ?? "lead"} as lost`}
@@ -335,13 +434,7 @@ const ListView = ({ filters }: { filters: LeadFilters }): JSX.Element => {
 
   return (
     <div className="panel overflow-hidden">
-      <div className="scroll-thin flex gap-5 overflow-x-auto border-b px-4 divider" role="tablist">
-        {STATUS_TABS.map((t) => (
-          <button key={t.id || "all"} role="tab" aria-selected={status === t.id} className="tab" onClick={() => set({ status: t.id || undefined })}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs className="px-4" value={status} onChange={(v) => set({ status: v || undefined })} tabs={STATUS_TABS.map((t) => ({ value: t.id, label: t.label }))} />
       {isError ? (
         <div className="p-4"><ErrorNote message="Leads didn't load." onRetry={() => refetch()} /></div>
       ) : !isLoading && rows.length === 0 ? (
@@ -370,8 +463,8 @@ const ListView = ({ filters }: { filters: LeadFilters }): JSX.Element => {
               <SkeletonRows rows={8} cols={8} />
             ) : (
               <tbody>
-                {rows.map((l) => (
-                  <tr key={l.id} className="row-link" onClick={() => navigate(`/leads/${l.id}`)}>
+                {rows.map((l, i) => (
+                  <tr key={l.id} className="row-link row-in" style={{ animationDelay: `${Math.min(i, 14) * 22}ms` }} onClick={() => navigate(`/leads/${l.id}`)}>
                     <td className="td">
                       <Link to={`/leads/${l.id}`} className="font-semibold hover:underline" onClick={(e) => e.stopPropagation()}>
                         {l.customer.company ?? l.customer.customerName}
@@ -453,14 +546,15 @@ const LeadsPage = (): JSX.Element => {
         }
         actions={
           <>
-            <div className="seg" role="group" aria-label="View">
-              <button aria-pressed={view === "board"} onClick={() => set({ view: undefined, status: undefined, sort: undefined })} className="flex items-center gap-1.5">
-                <KanbanSquare className="h-3.5 w-3.5" /> Board
-              </button>
-              <button aria-pressed={view === "list"} onClick={() => set({ view: "list" })} className="flex items-center gap-1.5">
-                <List className="h-3.5 w-3.5" /> List
-              </button>
-            </div>
+            <Segmented
+              label="View"
+              value={view}
+              onChange={(v) => (v === "board" ? set({ view: undefined, status: undefined, sort: undefined }) : set({ view: "list" }))}
+              options={[
+                { value: "board", label: "Board", icon: <KanbanSquare className="h-3.5 w-3.5" /> },
+                { value: "list", label: "List", icon: <List className="h-3.5 w-3.5" /> },
+              ]}
+            />
             <button className="btn" onClick={exportExcel} disabled={exporting}>
               {exporting ? <Spinner /> : <Download className="h-4 w-4" />} Export
             </button>
@@ -471,7 +565,11 @@ const LeadsPage = (): JSX.Element => {
         }
       />
       <FilterBar search={search} onSearch={setSearch} />
-      {view === "board" ? <Board filters={filters} /> : <ListView filters={filters} />}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div key={view} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.18 }}>
+          {view === "board" ? <Board filters={filters} /> : <ListView filters={filters} />}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 };

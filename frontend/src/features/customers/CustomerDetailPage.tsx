@@ -1,5 +1,7 @@
 import { ArrowLeft, Download, KanbanSquare, Mail, MapPin, MessageCircle, Pencil, Phone, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { motion } from "motion/react";
+import { AnimatedNumber } from "../../components/ui/AnimatedNumber";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useCreate } from "../../components/layout/CreateContext";
 import { Avatar } from "../../components/ui/Avatar";
@@ -17,10 +19,14 @@ import { useDocumentTitle } from "../../lib/hooks";
 import { isTerminal } from "../../lib/stages";
 import { CustomerForm } from "./CustomerForm";
 
-const Stat = ({ label, value, tone }: { label: string; value: string; tone?: string }): JSX.Element => (
+const Stat = ({ label, value, format, tone, empty }: { label: string; value: number; format: (n: number) => string; tone?: string; empty?: string }): JSX.Element => (
   <div className="px-5 py-4">
     <div className="muted text-xs">{label}</div>
-    <div className="condensed num mt-1 text-[26px] font-semibold leading-none" style={{ color: tone }}>{value}</div>
+    {empty ? (
+      <div className="condensed mt-1 text-[24px] leading-none">{empty}</div>
+    ) : (
+      <AnimatedNumber value={value} format={format} className="condensed num mt-1 block text-[24px] leading-none" style={{ color: tone }} />
+    )}
   </div>
 );
 
@@ -78,10 +84,10 @@ const CustomerDetailPage = (): JSX.Element => {
           </div>
         </div>
         <div className="grid grid-cols-2 border-t divider sm:grid-cols-4 [&>*:not(:first-child)]:border-l [&>*]:border-[var(--border)]">
-          <Stat label="Total business" value={inrCompact(c.totalValue)} />
-          <Stat label="Outstanding balance" value={inrCompact(c.balance)} tone={c.balance > 0 ? "var(--warning)" : undefined} />
-          <Stat label="Open pipeline" value={inrCompact(open.reduce((s, l) => s + l.approxValue, 0))} />
-          <Stat label="Win rate" value={winRate === null ? "None yet" : `${winRate}%`} />
+          <Stat label="Total business" value={c.totalValue} format={inrCompact} />
+          <Stat label="Outstanding balance" value={c.balance} format={inrCompact} tone={c.balance > 0 ? "var(--warning)" : undefined} />
+          <Stat label="Open pipeline" value={open.reduce((s, l) => s + l.approxValue, 0)} format={inrCompact} />
+          <Stat label="Win rate" value={winRate ?? 0} format={(n) => `${Math.round(n)}%`} empty={winRate === null ? "None yet" : undefined} />
         </div>
       </section>
 
@@ -94,8 +100,8 @@ const CustomerDetailPage = (): JSX.Element => {
             <EmptyState compact icon={<KanbanSquare className="h-5 w-5" />} title="No leads yet" hint="Create a lead when this customer enquires about equipment." action={<button className="btn btn-sm" onClick={() => create.openLead(customerOption(c))}><Plus className="h-3.5 w-3.5" /> New lead</button>} />
           ) : (
             <ul>
-              {leads.map((l) => (
-                <li key={l.leadId} className="border-b last:border-b-0 divider">
+              {leads.map((l, i) => (
+                <motion.li key={l.leadId} className="border-b last:border-b-0 divider" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.04, duration: 0.3 }}>
                   <Link to={`/leads/${l.leadId}`} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3.5 hover:bg-[var(--surface-2)]">
                     <StageBadge status={l.status} />
                     <div className="min-w-0 flex-1">
@@ -113,7 +119,7 @@ const CustomerDetailPage = (): JSX.Element => {
                     <PriorityBadge priority={l.priority} />
                     <span className="num w-28 text-right text-sm font-semibold">{inr(l.finalValue ?? l.approxValue)}</span>
                   </Link>
-                </li>
+                </motion.li>
               ))}
             </ul>
           )}

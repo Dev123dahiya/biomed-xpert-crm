@@ -1,5 +1,9 @@
 import { CalendarCheck, CalendarClock, CheckCircle2, Circle, MessageCircle, Phone } from "lucide-react";
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { AnimatePresence, motion } from "motion/react";
+import { Segmented, Tabs } from "../../components/ui/Segmented";
+import { easeOut } from "../../lib/motion";
 import { Link } from "react-router-dom";
 import { Avatar } from "../../components/ui/Avatar";
 import { StageBadge } from "../../components/ui/Badges";
@@ -22,7 +26,7 @@ const SCOPES: { id: FollowUpScope; label: string }[] = [
   { id: "done", label: "Done" },
 ];
 
-const Row = ({ f }: { f: FollowUpRow }): JSX.Element => {
+const Row = ({ f, onLeave, onReturn, index }: { f: FollowUpRow; onLeave: (id: string) => void; onReturn: (id: string) => void; index: number }): JSX.Element => {
   const { updateFollowUp } = useLeadMutations(f.lead.id);
   const { toast } = useToast();
   const d = dayDiff(f.dueAt);
@@ -31,16 +35,25 @@ const Row = ({ f }: { f: FollowUpRow }): JSX.Element => {
   const phone = phoneDigits(c.phone);
 
   const toggle = async () => {
+    // Leave the list straight away; come back if the save fails.
+    onLeave(f.id);
     try {
       await updateFollowUp.mutateAsync({ followUpId: f.id, leadId: f.lead.id, done: !f.done });
       toast(f.done ? "Moved back to open" : "Follow-up done");
     } catch (err) {
+      onReturn(f.id);
       toast(apiError(err).message, "error");
     }
   };
 
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-3.5 last:border-b-0 divider sm:px-5">
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0, transition: { delay: Math.min(index, 12) * 0.025, duration: 0.3, ease: easeOut } }}
+      exit={{ opacity: 0, x: 40, height: 0, paddingTop: 0, paddingBottom: 0, transition: { duration: 0.3, ease: easeOut } }}
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 overflow-hidden border-b px-4 py-3.5 last:border-b-0 divider sm:px-5 hover:bg-[var(--surface-2)]"
+    >
       <button onClick={toggle} disabled={updateFollowUp.isPending} aria-label={f.done ? "Mark as not done" : "Mark as done"} className="shrink-0">
         {f.done ? <CheckCircle2 className="h-5 w-5" style={{ color: "var(--success)" }} /> : <Circle className="h-5 w-5" style={{ color: overdue ? "var(--danger)" : "var(--border-strong)" }} />}
       </button>
@@ -66,7 +79,7 @@ const Row = ({ f }: { f: FollowUpRow }): JSX.Element => {
           </>
         )}
       </div>
-    </li>
+    </motion.li>
   );
 };
 
@@ -77,6 +90,8 @@ const FollowUpsPage = (): JSX.Element => {
   const page = Number(params.get("page") ?? 1);
   const { data, isLoading, isError, refetch } = useFollowUps(scope, mine, page);
   const counts = data?.meta.counts;
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const visible = (data?.items ?? []).filter((f) => !hidden.has(f.id));
 
   const set = (patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(params);
@@ -93,38 +108,54 @@ const FollowUpsPage = (): JSX.Element => {
         title="Follow-ups"
         subtitle="Calls, demos and visits scheduled across every lead."
         actions={
-          <div className="seg" role="group" aria-label="Whose follow-ups">
-            <button aria-pressed={!mine} onClick={() => set({ mine: undefined })}>Everyone</button>
-            <button aria-pressed={mine} onClick={() => set({ mine: "1" })}>Mine</button>
-          </div>
+          <Segmented
+            label="Whose follow-ups"
+            value={mine ? "mine" : "all"}
+            onChange={(v) => set({ mine: v === "mine" ? "1" : undefined })}
+            options={[{ value: "all", label: "Everyone" }, { value: "mine", label: "Mine" }]}
+          />
         }
       />
       <div className="panel overflow-hidden">
-        <div className="scroll-thin flex gap-5 overflow-x-auto border-b px-4 divider sm:px-5" role="tablist">
-          {SCOPES.map((s) => {
+        <Tabs
+          className="px-4 sm:px-5"
+          value={scope}
+          onChange={(v) => { setHidden(new Set()); set({ scope: v === "today" ? undefined : v }); }}
+          tabs={SCOPES.map((s) => {
             const n = countFor(s.id);
-            return (
-              <button key={s.id} role="tab" aria-selected={scope === s.id} className="tab flex items-center gap-1.5" onClick={() => set({ scope: s.id === "today" ? undefined : s.id })}>
-                {s.label}
-                {n !== undefined && n > 0 && (
-                  <span className="num rounded-full px-1.5 text-[11px] font-semibold" style={{ background: s.id === "overdue" ? "var(--danger-soft)" : "var(--surface-3)", color: s.id === "overdue" ? "var(--danger)" : "var(--text-2)" }}>{n}</span>
-                )}
-              </button>
-            );
+            return {
+              value: s.id,
+              label: s.label,
+              badge: n !== undefined && n > 0 ? (
+                <span className="num rounded-md px-1.5 text-[11px] font-semibold" style={{ background: s.id === "overdue" ? "var(--danger-soft)" : "var(--surface-3)", color: s.id === "overdue" ? "var(--danger)" : "var(--text-2)" }}>{n}</span>
+              ) : undefined,
+            };
           })}
-        </div>
+        />
         {isError ? (
           <div className="p-4"><ErrorNote message="Follow-ups didn't load." onRetry={() => refetch()} /></div>
         ) : isLoading ? (
           <div className="space-y-3 p-5">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-12" />)}</div>
-        ) : !data?.items.length ? (
+        ) : !visible.length ? (
           <EmptyState
             icon={scope === "overdue" ? <CalendarCheck className="h-5 w-5" /> : <CalendarClock className="h-5 w-5" />}
             title={scope === "overdue" ? "Nothing overdue" : scope === "today" ? "Nothing due today" : scope === "done" ? "No completed follow-ups yet" : "Nothing scheduled"}
             hint={scope === "overdue" ? "Every follow-up is on time." : "Schedule follow-ups from a lead once it's past the New stage."}
           />
         ) : (
-          <ul>{data.items.map((f) => <Row key={f.id} f={f} />)}</ul>
+          <ul>
+            <AnimatePresence initial={false}>
+              {visible.map((f, i) => (
+                <Row
+                  key={f.id}
+                  f={f}
+                  index={i}
+                  onLeave={(id) => setHidden((h) => new Set(h).add(id))}
+                  onReturn={(id) => setHidden((h) => { const n = new Set(h); n.delete(id); return n; })}
+                />
+              ))}
+            </AnimatePresence>
+          </ul>
         )}
         {data && data.items.length > 0 && <Pagination meta={data.meta} onPage={(p) => set({ page: String(p) })} noun="follow-ups" />}
       </div>
