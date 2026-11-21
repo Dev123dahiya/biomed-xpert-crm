@@ -3,6 +3,7 @@ import { MulterError } from "multer";
 import { asyncHandler } from "../../common/asyncHandler";
 import { AppError } from "../../common/AppError";
 import { authenticate } from "../../middleware/authenticate";
+import { authorize } from "../../middleware/authorize";
 import { validate } from "../../middleware/validate";
 import { leadsController } from "./leads.controller";
 import { quoteUpload } from "./leads.upload";
@@ -29,7 +30,8 @@ leadsRouter.get("/board", asyncHandler(leadsController.board));
 leadsRouter.post("/", validate(createLeadSchema), asyncHandler(leadsController.create));
 leadsRouter.get("/:id", asyncHandler(leadsController.get));
 leadsRouter.patch("/:id", validate(updateLeadSchema), asyncHandler(leadsController.update));
-leadsRouter.delete("/:id", asyncHandler(leadsController.remove));
+// Deleting a lead erases its history, so only admins can do it.
+leadsRouter.delete("/:id", authorize("ADMIN"), asyncHandler(leadsController.remove));
 
 leadsRouter.patch("/:id/status", validate(statusSchema), asyncHandler(leadsController.changeStatus));
 leadsRouter.get("/:id/timeline", asyncHandler(leadsController.timeline));

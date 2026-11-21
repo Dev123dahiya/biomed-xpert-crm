@@ -22,6 +22,15 @@ export const env = {
   },
   corsOrigin: (process.env.CORS_ORIGIN ?? "http://localhost:5173").split(","),
   cookieSecure: process.env.COOKIE_SECURE === "true",
+  // "none" is required when the web app and the API live on different sites
+  // (for example Vercel for the web and Render for the API). It needs HTTPS.
+  cookieSameSite: (["lax", "strict", "none"].includes(String(process.env.COOKIE_SAMESITE).toLowerCase())
+    ? String(process.env.COOKIE_SAMESITE).toLowerCase()
+    : "lax") as "lax" | "strict" | "none",
+  // Number of reverse proxies in front of the API (Render, Railway, Nginx).
+  // Needed so rate limiting sees the real client IP instead of the proxy.
+  trustProxy: Number(process.env.TRUST_PROXY ?? (process.env.NODE_ENV === "production" ? 1 : 0)),
+  apiRateLimit: Number(process.env.API_RATE_LIMIT ?? 1000),
   uploadDir: process.env.UPLOAD_DIR ?? "uploads",
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024),
 } as const;

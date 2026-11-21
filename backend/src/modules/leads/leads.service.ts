@@ -11,6 +11,7 @@ import {
   isTerminal,
 } from "./leads.constants";
 import { fullLeadInclude, serializeLead } from "./leads.serializer";
+import { adminIds, notify } from "../notifications/notify";
 import {
   addProductSchema,
   createLeadSchema,
@@ -69,22 +70,38 @@ const recomputeCustomerTotal = async (tx: Tx, customerId: string): Promise<void>
   await tx.customer.update({ where: { id: customerId }, data: { totalValue: agg._sum.finalValue ?? 0 } });
 };
 
+const OPEN: LeadStatus[] = [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.QUOTE_SHARED];
+
+const buildWhere = (query: z.infer<typeof listLeadsSchema>, includeStatus: boolean): Prisma.LeadWhereInput => {
+  const where: Prisma.LeadWhereInput = {};
+  if (includeStatus && query.status) where.status = query.status;
+  else if (includeStatus && query.stage === "open") where.status = { in: OPEN };
+  else if (includeStatus && query.stage === "closed") where.status = { in: [LeadStatus.WON, LeadStatus.LOST] };
+  if (query.customerId) where.customerId = query.customerId;
+  if (query.ownerId === "none") where.ownerId = null;
+  else if (query.ownerId) where.ownerId = query.ownerId;
+  if (query.sourceId) where.sourceId = query.sourceId;
+  if (query.priority) where.priority = query.priority;
+  if (query.search) {
+    const like = { contains: query.search, mode: "insensitive" as const };
+    where.OR = [
+      { notes: like },
+      { customer: { customerName: like } },
+      { customer: { company: like } },
+      { customer: { phone: like } },
+      { customer: { city: like } },
+    ];
+  }
+  return where;
+};
+
+const customerLabel = (c?: { customerName: string; company: string | null } | null): string =>
+  c ? c.company ?? c.customerName : "Customer";
+
 export const leadsService = {
   async list(query: z.infer<typeof listLeadsSchema>, page: PageParams) {
-    const where: Prisma.LeadWhereInput = {};
-    if (query.status) where.status = query.status;
-    if (query.customerId) where.customerId = query.customerId;
-    if (query.ownerId) where.ownerId = query.ownerId;
-    if (query.sourceId) where.sourceId = query.sourceId;
-    if (query.priority) where.priority = query.priority;
-    if (query.search) {
-      where.OR = [
-        { notes: { contains: query.search, mode: "insensitive" } },
-        { customer: { customerName: { contains: query.search, mode: "insensitive" } } },
-        { customer: { company: { contains: query.search, mode: "insensitive" } } },
-      ];
-    }
-    const orderBy = parseSort(query.sort, ["createdAt", "approxValue", "priority"], { createdAt: "desc" });
+    const where = buildWhere(query, true);
+    const orderBy = parseSort(query.sort, ["createdAt", "updatedAt", "approxValue", "priority", "status"], { createdAt: "desc" });
     const [items, total] = await Promise.all([
       prisma.lead.findMany({
         where,
@@ -92,10 +109,12 @@ export const leadsService = {
         skip: page.skip,
         take: page.take,
         include: {
-          customer: { select: { id: true, customerName: true, company: true } },
+          customer: { select: { id: true, customerName: true, company: true, city: true } },
           source: { select: { name: true } },
+          owner: { select: { id: true, name: true } },
           _count: { select: { products: true } },
           followUps: { where: { done: false }, orderBy: { dueAt: "asc" }, take: 1 },
+          wonDeal: { select: { finalValue: true } },
         },
       }),
       prisma.lead.count({ where }),
@@ -107,28 +126,36 @@ export const leadsService = {
       approxValue: toNumber(l.approxValue),
       customer: l.customer,
       source: l.source?.name,
+      owner: l.owner,
       productCount: l._count.products,
       nextFollowUp: l.followUps[0]?.dueAt ?? null,
+      finalValue: l.wonDeal ? toNumber(l.wonDeal.finalValue) : null,
+      createdAt: l.createdAt,
+      updatedAt: l.updatedAt,
     }));
     return { items: rows, meta: buildMeta(page, total) };
   },
 
   async board(query: z.infer<typeof listLeadsSchema>) {
-    const where: Prisma.LeadWhereInput = {};
-    if (query.customerId) where.customerId = query.customerId;
-    if (query.ownerId) where.ownerId = query.ownerId;
-    if (query.sourceId) where.sourceId = query.sourceId;
-    if (query.priority) where.priority = query.priority;
+    const where = buildWhere(query, false);
 
-    const grouped = await prisma.lead.groupBy({ by: ["status"], where, _count: { _all: true } });
+    const grouped = await prisma.lead.groupBy({ by: ["status"], where, _count: { _all: true }, _sum: { approxValue: true } });
     const counts = new Map(grouped.map((g) => [g.status, g._count._all]));
+    const values = new Map(grouped.map((g) => [g.status, toNumber(g._sum.approxValue)]));
+    // The Won column is worth what was actually ordered, not the original estimate.
+    const wonAgg = await prisma.wonDeal.aggregate({ where: { lead: where }, _sum: { finalValue: true } });
+    values.set(LeadStatus.WON, toNumber(wonAgg._sum.finalValue));
     const leads = await prisma.lead.findMany({
       where,
       orderBy: { updatedAt: "desc" },
       take: 300,
       include: {
-        customer: { select: { customerName: true, company: true } },
-        _count: { select: { products: true } },
+        customer: { select: { customerName: true, company: true, city: true } },
+        owner: { select: { id: true, name: true } },
+        source: { select: { name: true } },
+        _count: { select: { products: true, quotes: true } },
+        followUps: { where: { done: false }, orderBy: { dueAt: "asc" }, take: 1, select: { dueAt: true } },
+        wonDeal: { select: { finalValue: true } },
       },
     });
     const buckets = new Map<LeadStatus, unknown[]>();
@@ -137,8 +164,17 @@ export const leadsService = {
         id: l.id,
         customer: l.customer?.company ?? l.customer?.customerName,
         approxValue: toNumber(l.approxValue),
+        contact: l.customer?.customerName,
+        city: l.customer?.city ?? null,
         priority: l.priority,
         productCount: l._count.products,
+        quoteCount: l._count.quotes,
+        owner: l.owner,
+        source: l.source?.name ?? null,
+        nextFollowUp: l.followUps[0]?.dueAt ?? null,
+        finalValue: l.wonDeal ? toNumber(l.wonDeal.finalValue) : null,
+        createdAt: l.createdAt,
+        updatedAt: l.updatedAt,
       };
       const arr = buckets.get(l.status) ?? [];
       arr.push(card);
@@ -154,6 +190,7 @@ export const leadsService = {
     ] as LeadStatus[]).map((status) => ({
       status,
       count: counts.get(status) ?? 0,
+      value: values.get(status) ?? 0,
       leads: buckets.get(status) ?? [],
     }));
     return { columns };
@@ -169,6 +206,10 @@ export const leadsService = {
     if (input.followUp && !followUpAllowed(status)) {
       throw new AppError(400, "FOLLOWUP_STAGE_INVALID", "Follow-ups are available from the Contacted stage");
     }
+    if (input.ownerId) {
+      const owner = await prisma.user.findFirst({ where: { id: input.ownerId, active: true } });
+      if (!owner) throw new AppError(404, "USER_NOT_FOUND", "That teammate does not exist or is inactive");
+    }
 
     const created = await prisma.lead.create({
       data: {
@@ -179,19 +220,23 @@ export const leadsService = {
         approxValue: input.approxValue,
         priority: input.priority,
         notes: input.notes,
-        owner: { connect: { id: ownerId } },
+        owner: { connect: { id: input.ownerId ?? ownerId } },
         products: { create: lines },
         timeline: { create: { toStatus: status, actorId: ownerId, note: "Lead created" } },
         followUps: input.followUp ? { create: { dueAt: input.followUp.dueAt, note: input.followUp.note } } : undefined,
       },
     });
+    if (input.ownerId && input.ownerId !== ownerId) {
+      await notify([input.ownerId], "LEAD_ASSIGNED", `You were assigned a new lead for ${customer.company ?? customer.customerName}`, ownerId);
+    }
     return fullLead(created.id);
   },
 
   get: (id: string) => fullLead(id),
 
-  async update(id: string, input: z.infer<typeof updateLeadSchema>) {
+  async update(id: string, input: z.infer<typeof updateLeadSchema>, actorId?: string) {
     const lead = await loadLead(id);
+    const before = await prisma.lead.findUnique({ where: { id }, select: { ownerId: true, customer: { select: { customerName: true, company: true } } } });
     if (input.sourceId) await ensureSourceOther(input.sourceId, input.sourceOther);
     const data: Prisma.LeadUpdateInput = {};
     if (input.sourceId) data.source = { connect: { id: input.sourceId } };
@@ -199,13 +244,29 @@ export const leadsService = {
     if (input.approxValue !== undefined) data.approxValue = input.approxValue;
     if (input.priority) data.priority = input.priority;
     if (input.notes !== undefined) data.notes = input.notes;
+    if (input.ownerId !== undefined) {
+      if (input.ownerId) {
+        const owner = await prisma.user.findFirst({ where: { id: input.ownerId, active: true } });
+        if (!owner) throw new AppError(404, "USER_NOT_FOUND", "That teammate does not exist or is inactive");
+        data.owner = { connect: { id: input.ownerId } };
+      } else {
+        data.owner = { disconnect: true };
+      }
+    }
     await prisma.lead.update({ where: { id: lead.id }, data });
+    if (input.ownerId && input.ownerId !== before?.ownerId) {
+      await notify([input.ownerId], "LEAD_ASSIGNED", `You were assigned the lead for ${customerLabel(before?.customer)}`, actorId);
+    }
     return fullLead(id);
   },
 
   async remove(id: string) {
-    await loadLead(id);
-    await prisma.lead.delete({ where: { id } });
+    const lead = await loadLead(id);
+    await prisma.$transaction(async (tx) => {
+      await tx.lead.delete({ where: { id } });
+      // Keep the customer's lifetime value in step when a won lead is removed.
+      await recomputeCustomerTotal(tx, lead.customerId);
+    });
     return { deleted: true };
   },
 
@@ -219,6 +280,8 @@ export const leadsService = {
       await tx.lead.update({ where: { id }, data: { status: toStatus } });
       await tx.leadTimeline.create({ data: { leadId: id, fromStatus: lead.status, toStatus, actorId, note } });
     });
+    const info = await prisma.lead.findUnique({ where: { id }, select: { ownerId: true, customer: { select: { customerName: true, company: true } } } });
+    await notify([info?.ownerId], "LEAD_STAGE", `${customerLabel(info?.customer)} moved to ${toStatus.replace("_", " ").toLowerCase()}`, actorId);
     return fullLead(id);
   },
 
@@ -310,6 +373,13 @@ export const leadsService = {
       await tx.leadTimeline.create({ data: { leadId: id, fromStatus: lead.status, toStatus: LeadStatus.WON, actorId, note: "Marked won" } });
       await recomputeCustomerTotal(tx, lead.customerId);
     });
+    const info = await prisma.lead.findUnique({ where: { id }, select: { ownerId: true, customer: { select: { customerName: true, company: true } } } });
+    await notify(
+      [info?.ownerId, ...(await adminIds())],
+      "LEAD_WON",
+      `Deal won with ${customerLabel(info?.customer)} for ₹${Math.round(input.finalValue).toLocaleString("en-IN")}`,
+      actorId,
+    );
     return fullLead(id);
   },
 
@@ -349,6 +419,8 @@ export const leadsService = {
       await tx.lostDeal.create({ data: { leadId: id, reason: input.reason, competitor: input.competitor, remarks: input.remarks } });
       await tx.leadTimeline.create({ data: { leadId: id, fromStatus: lead.status, toStatus: LeadStatus.LOST, actorId, note: "Marked lost" } });
     });
+    const info = await prisma.lead.findUnique({ where: { id }, select: { ownerId: true, customer: { select: { customerName: true, company: true } } } });
+    await notify([info?.ownerId, ...(await adminIds())], "LEAD_LOST", `Deal lost with ${customerLabel(info?.customer)}: ${input.reason}`, actorId);
     return fullLead(id);
   },
 

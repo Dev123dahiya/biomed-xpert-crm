@@ -1,4 +1,6 @@
 import { type ReactNode } from "react";
+import { Modal } from "./Modal";
+import { Spinner } from "./Spinner";
 
 interface Props {
   open: boolean;
@@ -8,21 +10,24 @@ interface Props {
   onConfirm: () => void;
   onCancel: () => void;
   danger?: boolean;
+  busy?: boolean;
 }
 
-export const ConfirmDialog = ({ open, title, message, confirmLabel = "Confirm", onConfirm, onCancel, danger }: Props): JSX.Element | null => {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0" style={{ background: "rgba(6,12,22,0.45)" }} onClick={onCancel} />
-      <div className="card relative w-full max-w-sm p-5">
-        <div className="mb-1 font-display text-base font-semibold">{title}</div>
-        <div className="muted mb-4 text-sm">{message}</div>
-        <div className="flex justify-end gap-2">
-          <button className="btn" onClick={onCancel}>Cancel</button>
-          <button className={danger ? "btn btn-danger" : "btn btn-primary"} onClick={onConfirm}>{confirmLabel}</button>
-        </div>
-      </div>
-    </div>
-  );
-};
+export const ConfirmDialog = ({ open, title, message, confirmLabel = "Confirm", onConfirm, onCancel, danger, busy }: Props): JSX.Element | null => (
+  <Modal
+    open={open}
+    title={title}
+    onClose={onCancel}
+    width={420}
+    footer={
+      <>
+        <button className="btn" onClick={onCancel}>Cancel</button>
+        <button className={danger ? "btn btn-danger" : "btn btn-primary"} onClick={onConfirm} disabled={busy} data-autofocus>
+          {busy && <Spinner />} {confirmLabel}
+        </button>
+      </>
+    }
+  >
+    <div className="text-2 text-sm">{message}</div>
+  </Modal>
+);

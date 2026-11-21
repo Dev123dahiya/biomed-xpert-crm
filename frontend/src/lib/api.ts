@@ -1,8 +1,16 @@
 import axios, { AxiosError, AxiosRequestConfig } from "axios";
 
-const baseURL = (import.meta.env.VITE_API_BASE_URL || "") + "/api/v1";
+const apiOrigin = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+const baseURL = apiOrigin + "/api/v1";
 
-export const api = axios.create({ baseURL, withCredentials: true });
+export const api = axios.create({ baseURL, withCredentials: true, timeout: 70_000 });
+
+// Files such as quote PDFs are served by the API, which may live on another origin.
+export const assetUrl = (path?: string | null): string | undefined => {
+  if (!path) return undefined;
+  if (/^https?:\/\//i.test(path)) return path;
+  return apiOrigin + path;
+};
 
 let accessToken: string | null = null;
 export const setAccessToken = (token: string | null): void => {
@@ -22,7 +30,7 @@ let refreshing: Promise<string | null> | null = null;
 
 const refresh = async (): Promise<string | null> => {
   try {
-    const res = await axios.post(`${baseURL}/auth/refresh`, {}, { withCredentials: true });
+    const res = await axios.post(`${baseURL}/auth/refresh`, {}, { withCredentials: true, timeout: 70_000 });
     const token = res.data?.data?.accessToken ?? null;
     setAccessToken(token);
     return token;
@@ -30,6 +38,12 @@ const refresh = async (): Promise<string | null> => {
     setAccessToken(null);
     return null;
   }
+};
+
+// Called when a refresh fails mid-session, so the app can send the user to sign in.
+let onSessionExpired: (() => void) | null = null;
+export const setSessionExpiredHandler = (fn: (() => void) | null): void => {
+  onSessionExpired = fn;
 };
 
 api.interceptors.response.use(
@@ -48,6 +62,7 @@ api.interceptors.response.use(
         (original.headers as Record<string, string>).Authorization = `Bearer ${token}`;
         return api(original);
       }
+      onSessionExpired?.();
     }
     return Promise.reject(error);
   },
@@ -61,7 +76,10 @@ export interface ApiError {
 
 export const apiError = (error: unknown): ApiError => {
   const err = error as AxiosError<{ error?: ApiError }>;
-  return err.response?.data?.error ?? { code: "UNKNOWN", message: "Something went wrong" };
+  if (err?.response?.data?.error) return err.response.data.error;
+  if (err?.code === "ECONNABORTED") return { code: "TIMEOUT", message: "The server took too long to respond. Try again in a moment." };
+  if (err?.isAxiosError && !err.response) return { code: "NETWORK", message: "Can't reach the server. Check your connection and try again." };
+  return { code: "UNKNOWN", message: "Something went wrong. Try again." };
 };
 
 // Unwrap the { success, data, meta } envelope.

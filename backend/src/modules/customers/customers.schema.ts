@@ -29,3 +29,5 @@ export const listCustomersSchema = z.object({
   pageSize: z.coerce.number().optional(),
   sort: z.string().optional(),
 });
+
+export const importCustomersSchema = z.object({ rows: z.array(z.record(z.unknown())).min(1).max(1000) });

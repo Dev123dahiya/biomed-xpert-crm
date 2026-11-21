@@ -8,8 +8,9 @@ import { authService } from "./auth.service";
 const REFRESH_COOKIE = "bmx_refresh";
 const cookieOptions = {
   httpOnly: true,
-  secure: env.cookieSecure,
-  sameSite: "lax" as const,
+  // SameSite=None cookies are rejected by browsers unless they are also Secure.
+  secure: env.cookieSecure || env.cookieSameSite === "none",
+  sameSite: env.cookieSameSite,
   path: "/api/v1/auth",
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };

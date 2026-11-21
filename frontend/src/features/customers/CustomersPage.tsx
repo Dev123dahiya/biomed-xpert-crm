@@ -1,127 +1,173 @@
-import { MoreHorizontal, Plus, Search, Trash2, Users } from "lucide-react";
-import { useState } from "react";
-import { apiError } from "../../lib/api";
-import { inr } from "../../lib/format";
-import { EmptyState, ErrorNote, SkeletonRows } from "../../components/ui/States";
+import { ArrowDown, ArrowUp, Download, Plus, Search, Upload, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useCreate } from "../../components/layout/CreateContext";
+import { Avatar } from "../../components/ui/Avatar";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Pagination } from "../../components/ui/Pagination";
-import { SlideOver } from "../../components/ui/SlideOver";
-import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { EmptyState, ErrorNote, SkeletonRows } from "../../components/ui/States";
+import { Spinner } from "../../components/ui/Spinner";
 import { useToast } from "../../components/ui/Toast";
-import { useCustomers, useCustomerMutations } from "../../hooks/useCustomers";
-import { CustomerForm } from "./CustomerForm";
-import type { Customer } from "../../types";
+import { useCustomers } from "../../hooks/useCustomers";
+import { apiError } from "../../lib/api";
+import { cn } from "../../lib/cn";
+import { downloadFile } from "../../lib/download";
+import { inr } from "../../lib/format";
+import { useDebounced } from "../../lib/hooks";
+import { ImportCustomers } from "./ImportCustomers";
 
-export const CustomersPage = (): JSX.Element => {
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [editing, setEditing] = useState<Customer | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [toDelete, setToDelete] = useState<Customer | null>(null);
+const SORTS = [
+  { id: "-createdAt", label: "Newest" },
+  { id: "customerName", label: "Name A to Z" },
+  { id: "-totalValue", label: "Highest business" },
+  { id: "-balance", label: "Highest balance" },
+];
+
+const CustomersPage = (): JSX.Element => {
+  const [params, setParams] = useSearchParams();
+  const [search, setSearch] = useState(params.get("search") ?? "");
+  const dsearch = useDebounced(search, 300);
+  const page = Number(params.get("page") ?? 1);
+  const sort = params.get("sort") ?? "-createdAt";
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const create = useCreate();
+  const navigate = useNavigate();
   const { toast } = useToast();
 
-  const { data, isLoading, isError } = useCustomers({ search: search || undefined, page });
-  const { remove } = useCustomerMutations();
+  const set = (patch: Record<string, string | undefined>) => {
+    const next = new URLSearchParams(params);
+    Object.entries(patch).forEach(([k, v]) => (v ? next.set(k, v) : next.delete(k)));
+    if (!("page" in patch)) next.delete("page");
+    setParams(next, { replace: true });
+  };
 
-  const confirmDelete = async (): Promise<void> => {
-    if (!toDelete) return;
+  useEffect(() => {
+    if ((params.get("search") ?? "") !== dsearch) set({ search: dsearch || undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dsearch]);
+
+  const { data, isLoading, isError, refetch } = useCustomers({ search: params.get("search") || undefined, page, sort, pageSize: 25 });
+  const rows = data?.items ?? [];
+  const empty = !isLoading && rows.length === 0;
+
+  const exportCsv = async (format: "xlsx" | "csv") => {
+    setExporting(true);
     try {
-      await remove.mutateAsync(toDelete.id);
-      toast("Customer deleted");
+      await downloadFile(`/reports/customers?format=${format}`);
+      toast("Customer list downloaded");
     } catch (err) {
       toast(apiError(err).message, "error");
     } finally {
-      setToDelete(null);
+      setExporting(false);
     }
   };
 
-  const rows = data?.items ?? [];
-  const showEmpty = !isLoading && rows.length === 0;
+  const SortTh = ({ field, label, right }: { field: string; label: string; right?: boolean }) => {
+    const active = sort.replace("-", "") === field;
+    const desc = sort.startsWith("-");
+    return (
+      <th className={cn("th", right && "text-right")} aria-sort={active ? (desc ? "descending" : "ascending") : undefined}>
+        <button className={right ? "ml-auto" : undefined} onClick={() => set({ sort: active && desc ? field : `-${field}` })}>
+          {label} {active && (desc ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />)}
+        </button>
+      </th>
+    );
+  };
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-xl font-semibold">Customers</h1>
-          <p className="muted text-sm">{data ? `${data.meta.total} customers` : "\u00a0"}</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Add customer</button>
-      </div>
+      <PageHeader
+        title="Customers"
+        subtitle={data ? `${data.meta.total} doctors, hospitals and clinics` : " "}
+        actions={
+          <>
+            <button className="btn" onClick={() => setImporting(true)}><Upload className="h-4 w-4" /> Import</button>
+            <button className="btn" onClick={() => exportCsv("xlsx")} disabled={exporting}>{exporting ? <Spinner /> : <Download className="h-4 w-4" />} Export</button>
+            <button className="btn btn-primary" onClick={() => create.openCustomer()}><Plus className="h-4 w-4" /> New customer</button>
+          </>
+        }
+      />
 
-      <div className="card overflow-hidden">
-        <div className="flex items-center gap-2 p-3" style={{ borderBottom: "1px solid var(--border)" }}>
-          <div className="relative max-w-xs flex-1">
-            <Search className="muted absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-            <input
-              className="input pl-9"
-              placeholder="Search customers"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            />
+      <div className="panel overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2 border-b p-3 divider">
+          <div className="relative w-full sm:w-80">
+            <Search className="muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            <input className="input pl-9" placeholder="Name, hospital, phone, GSTIN or city" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search customers" />
           </div>
+          <div className="flex-1" />
+          <label className="muted text-xs" htmlFor="c-sort">Sort</label>
+          <select id="c-sort" className="input h-9 w-auto" value={sort} onChange={(e) => set({ sort: e.target.value })}>
+            {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
         </div>
 
         {isError ? (
-          <ErrorNote message="Could not load customers." />
-        ) : showEmpty ? (
-          <EmptyState
-            icon={<Users className="h-8 w-8" />}
-            title="No customers yet"
-            hint="Add your first customer to start tracking leads."
-            action={<button className="btn btn-primary" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Add customer</button>}
-          />
+          <div className="p-4"><ErrorNote message="Customers didn't load." onRetry={() => refetch()} /></div>
+        ) : empty ? (
+          params.get("search") ? (
+            <EmptyState icon={<Search className="h-5 w-5" />} title={`No customers match "${params.get("search")}"`} hint="Check the spelling, or search by phone number or GSTIN." />
+          ) : (
+            <EmptyState
+              icon={<Users className="h-5 w-5" />}
+              title="Add your first customer"
+              hint="Customers are the doctors and hospitals you sell to. Add one, or import your existing list from a spreadsheet."
+              action={
+                <div className="flex gap-2">
+                  <button className="btn" onClick={() => setImporting(true)}><Upload className="h-4 w-4" /> Import CSV</button>
+                  <button className="btn btn-primary" onClick={() => create.openCustomer()}><Plus className="h-4 w-4" /> New customer</button>
+                </div>
+              }
+            />
+          )
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className="th">Customer</th>
-                <th className="th">Company</th>
-                <th className="th">City</th>
-                <th className="th text-right">Balance</th>
-                <th className="th text-right">Total Value</th>
-                <th className="th" />
-              </tr>
-            </thead>
-            {isLoading ? (
-              <SkeletonRows rows={6} cols={6} />
-            ) : (
-              <tbody>
-                {rows.map((c) => (
-                  <tr key={c.id} className="row-hover">
-                    <td className="td font-medium">{c.customerName}</td>
-                    <td className="td">{c.company ?? "\u2014"}</td>
-                    <td className="td">{c.city ?? "\u2014"}</td>
-                    <td className="td mono text-right">{inr(c.balance)}</td>
-                    <td className="td mono text-right">{inr(c.totalValue)}</td>
-                    <td className="td text-right">
-                      <div className="flex justify-end gap-1">
-                        <button className="btn btn-ghost" onClick={() => setEditing(c)} aria-label="Edit"><MoreHorizontal className="h-4 w-4" /></button>
-                        <button className="btn btn-ghost" onClick={() => setToDelete(c)} aria-label="Delete"><Trash2 className="h-4 w-4" /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            )}
-          </table>
+          <div className="scroll-thin overflow-x-auto">
+            <table className="table min-w-[760px]">
+              <thead>
+                <tr>
+                  <SortTh field="customerName" label="Customer" />
+                  <th className="th">Contact</th>
+                  <th className="th">City</th>
+                  <th className="th">GSTIN</th>
+                  <SortTh field="balance" label="Balance" right />
+                  <SortTh field="totalValue" label="Total business" right />
+                </tr>
+              </thead>
+              {isLoading ? (
+                <SkeletonRows rows={8} cols={6} />
+              ) : (
+                <tbody>
+                  {rows.map((c) => (
+                    <tr key={c.id} className="row-link" onClick={() => navigate(`/customers/${c.id}`)}>
+                      <td className="td">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={c.company ?? c.customerName} size={32} />
+                          <div className="min-w-0">
+                            <Link to={`/customers/${c.id}`} onClick={(e) => e.stopPropagation()} className="block truncate font-semibold hover:underline">{c.customerName}</Link>
+                            <div className="muted truncate text-xs">{c.company}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="td">
+                        <div className="num truncate">{c.phone}</div>
+                        <div className="muted truncate text-xs">{c.email}</div>
+                      </td>
+                      <td className="td">{c.city}{c.state && c.state !== c.city ? <span className="muted">, {c.state}</span> : null}</td>
+                      <td className="td num text-2 text-xs">{c.gstin}</td>
+                      <td className="td num text-right" style={{ color: c.balance > 0 ? "var(--warning)" : undefined }}>{inr(c.balance)}</td>
+                      <td className="td num text-right font-semibold">{inr(c.totalValue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              )}
+            </table>
+          </div>
         )}
-        {data && !showEmpty && <Pagination meta={data.meta} onPage={setPage} />}
+        {data && !empty && <Pagination meta={data.meta} onPage={(p) => set({ page: String(p) })} noun="customers" />}
       </div>
-
-      <SlideOver open={creating} title="Add customer" onClose={() => setCreating(false)}>
-        <CustomerForm onDone={() => setCreating(false)} />
-      </SlideOver>
-      <SlideOver open={Boolean(editing)} title="Edit customer" onClose={() => setEditing(null)}>
-        {editing && <CustomerForm existing={editing} onDone={() => setEditing(null)} />}
-      </SlideOver>
-      <ConfirmDialog
-        open={Boolean(toDelete)}
-        title="Delete customer"
-        message={`Remove ${toDelete?.customerName}? A customer with leads cannot be deleted.`}
-        confirmLabel="Delete"
-        danger
-        onConfirm={confirmDelete}
-        onCancel={() => setToDelete(null)}
-      />
+      <ImportCustomers open={importing} onClose={() => setImporting(false)} />
     </div>
   );
 };
+
+export default CustomersPage;

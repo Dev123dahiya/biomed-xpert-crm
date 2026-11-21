@@ -13,6 +13,11 @@ const patchSchema = z
     orgName: z.string().min(1).optional(),
     listPageSize: z.coerce.number().int().positive().optional(),
     maxProductsPerLead: z.coerce.number().int().positive().optional(),
+    monthlyTarget: z.coerce.number().min(0).optional(),
+    orgPhone: z.string().optional(),
+    orgEmail: z.string().email().optional().or(z.literal("")),
+    orgAddress: z.string().optional(),
+    orgGstin: z.string().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "Provide at least one setting" });
 

@@ -1,105 +1,155 @@
-import { MoreHorizontal, Package, Plus, Search, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { MoreHorizontal, Package, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useCreate } from "../../components/layout/CreateContext";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { Menu } from "../../components/ui/Menu";
+import { SlideOver } from "../../components/ui/Modal";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { Pagination } from "../../components/ui/Pagination";
+import { EmptyState, ErrorNote, SkeletonRows } from "../../components/ui/States";
+import { useToast } from "../../components/ui/Toast";
+import { useProductCategories } from "../../hooks/useMeta";
+import { useProductMutations, useProducts } from "../../hooks/useProducts";
 import { apiError } from "../../lib/api";
 import { inr } from "../../lib/format";
-import { EmptyState, ErrorNote, SkeletonRows } from "../../components/ui/States";
-import { Pagination } from "../../components/ui/Pagination";
-import { SlideOver } from "../../components/ui/SlideOver";
-import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
-import { useToast } from "../../components/ui/Toast";
-import { useProducts, useProductMutations } from "../../hooks/useProducts";
-import { ProductForm } from "./ProductForm";
+import { useDebounced } from "../../lib/hooks";
 import type { Product } from "../../types";
+import { ProductForm } from "./ProductForm";
 
-export const ProductsPage = (): JSX.Element => {
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+const ProductsPage = (): JSX.Element => {
+  const [params, setParams] = useSearchParams();
+  const [search, setSearch] = useState(params.get("search") ?? "");
+  const dsearch = useDebounced(search, 300);
+  const category = params.get("category") ?? "";
+  const sort = params.get("sort") ?? "name";
+  const page = Number(params.get("page") ?? 1);
   const [editing, setEditing] = useState<Product | null>(null);
-  const [creating, setCreating] = useState(false);
   const [toDelete, setToDelete] = useState<Product | null>(null);
+  const create = useCreate();
   const { toast } = useToast();
-
-  const { data, isLoading, isError } = useProducts({ search: search || undefined, page });
+  const { data: categories } = useProductCategories();
   const { remove } = useProductMutations();
 
-  const confirmDelete = async (): Promise<void> => {
-    if (!toDelete) return;
-    try {
-      await remove.mutateAsync(toDelete.id);
-      toast("Product deleted");
-    } catch (err) {
-      toast(apiError(err).message, "error");
-    } finally {
-      setToDelete(null);
-    }
+  const set = (patch: Record<string, string | undefined>) => {
+    const next = new URLSearchParams(params);
+    Object.entries(patch).forEach(([k, v]) => (v ? next.set(k, v) : next.delete(k)));
+    if (!("page" in patch)) next.delete("page");
+    setParams(next, { replace: true });
   };
+  useEffect(() => {
+    if ((params.get("search") ?? "") !== dsearch) set({ search: dsearch || undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dsearch]);
 
+  const { data, isLoading, isError, refetch } = useProducts({ search: params.get("search") || undefined, category: category || undefined, sort, page, pageSize: 25 });
   const rows = data?.items ?? [];
-  const showEmpty = !isLoading && rows.length === 0;
+  const empty = !isLoading && rows.length === 0;
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-xl font-semibold">Products</h1>
-          <p className="muted text-sm">Equipment catalog</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Add product</button>
-      </div>
+      <PageHeader
+        title="Products"
+        subtitle="Equipment catalogue with list prices. Prices can be changed per lead."
+        actions={<button className="btn btn-primary" onClick={() => create.openProduct()}><Plus className="h-4 w-4" /> New product</button>}
+      />
 
-      <div className="card overflow-hidden">
-        <div className="flex items-center gap-2 p-3" style={{ borderBottom: "1px solid var(--border)" }}>
-          <div className="relative max-w-xs flex-1">
-            <Search className="muted absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-            <input className="input pl-9" placeholder="Search products" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+      {categories && categories.length > 0 && (
+        <div className="scroll-thin -mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1">
+          <button className="chip" aria-pressed={!category} onClick={() => set({ category: undefined })}>All</button>
+          {categories.map((c) => (
+            <button key={c.name} className="chip" aria-pressed={category === c.name} onClick={() => set({ category: category === c.name ? undefined : c.name })}>
+              {c.name} <span className="num opacity-60">{c.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="panel overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2 border-b p-3 divider">
+          <div className="relative w-full sm:w-80">
+            <Search className="muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            <input className="input pl-9" placeholder="Name, make or model" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search products" />
           </div>
+          <div className="flex-1" />
+          <select className="input h-9 w-auto" value={sort} onChange={(e) => set({ sort: e.target.value })} aria-label="Sort">
+            <option value="name">Name A to Z</option>
+            <option value="-unitPrice">Price, high to low</option>
+            <option value="unitPrice">Price, low to high</option>
+            <option value="-createdAt">Recently added</option>
+          </select>
         </div>
-
         {isError ? (
-          <ErrorNote message="Could not load products." />
-        ) : showEmpty ? (
-          <EmptyState icon={<Package className="h-8 w-8" />} title="No products yet" hint="Add equipment to your catalog." action={<button className="btn btn-primary" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Add product</button>} />
+          <div className="p-4"><ErrorNote message="Products didn't load." onRetry={() => refetch()} /></div>
+        ) : empty ? (
+          <EmptyState
+            icon={<Package className="h-5 w-5" />}
+            title={params.get("search") || category ? "No products match" : "Build your catalogue"}
+            hint={params.get("search") || category ? "Try another search or category." : "Add the equipment you sell so it can be picked on leads and quotes."}
+            action={!params.get("search") && !category ? <button className="btn btn-primary" onClick={() => create.openProduct()}><Plus className="h-4 w-4" /> New product</button> : undefined}
+          />
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className="th">Product</th><th className="th">Make</th><th className="th">Model</th><th className="th">Category</th>
-                <th className="th text-right">Unit Price</th><th className="th" />
-              </tr>
-            </thead>
-            {isLoading ? (
-              <SkeletonRows rows={6} cols={6} />
-            ) : (
-              <tbody>
-                {rows.map((p) => (
-                  <tr key={p.id} className="row-hover">
-                    <td className="td font-medium">{p.name}</td>
-                    <td className="td">{p.make}</td>
-                    <td className="td">{p.model}</td>
-                    <td className="td">{p.category ? <span className="pill" style={{ background: "var(--accent)", color: "var(--primary)" }}>{p.category}</span> : "\u2014"}</td>
-                    <td className="td mono text-right">{inr(p.unitPrice)}</td>
-                    <td className="td text-right">
-                      <div className="flex justify-end gap-1">
-                        <button className="btn btn-ghost" onClick={() => setEditing(p)}><MoreHorizontal className="h-4 w-4" /></button>
-                        <button className="btn btn-ghost" onClick={() => setToDelete(p)}><Trash2 className="h-4 w-4" /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            )}
-          </table>
+          <div className="scroll-thin overflow-x-auto">
+            <table className="table min-w-[680px]">
+              <thead>
+                <tr><th className="th">Product</th><th className="th">Make and model</th><th className="th">Category</th><th className="th text-right">List price</th><th className="th w-12" /></tr>
+              </thead>
+              {isLoading ? (
+                <SkeletonRows rows={8} cols={5} />
+              ) : (
+                <tbody>
+                  {rows.map((p) => (
+                    <tr key={p.id}>
+                      <td className="td">
+                        <button className="text-left font-semibold hover:underline" onClick={() => setEditing(p)}>{p.name}</button>
+                        {p.description && <div className="muted line-clamp-1 max-w-sm text-xs">{p.description}</div>}
+                      </td>
+                      <td className="td"><span className="font-medium">{p.make}</span> <span className="text-2">{p.model}</span></td>
+                      <td className="td">{p.category ? <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-2)" }}>{p.category}</span> : <span className="muted">None</span>}</td>
+                      <td className="td num text-right font-semibold">{inr(p.unitPrice)}</td>
+                      <td className="td text-right">
+                        <Menu width={170} trigger={({ toggle }) => <button className="btn btn-ghost btn-sm btn-icon" onClick={toggle} aria-label={`Actions for ${p.name}`}><MoreHorizontal className="h-4 w-4" /></button>}>
+                          {(close) => (
+                            <>
+                              <button className="menu-item" onClick={() => { close(); setEditing(p); }}><Pencil className="h-4 w-4" /> Edit</button>
+                              <button className="menu-item" style={{ color: "var(--danger)" }} onClick={() => { close(); setToDelete(p); }}><Trash2 className="h-4 w-4" /> Delete</button>
+                            </>
+                          )}
+                        </Menu>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              )}
+            </table>
+          </div>
         )}
-        {data && !showEmpty && <Pagination meta={data.meta} onPage={setPage} />}
+        {data && !empty && <Pagination meta={data.meta} onPage={(p) => set({ page: String(p) })} noun="products" />}
       </div>
 
-      <SlideOver open={creating} title="Add product" onClose={() => setCreating(false)}>
-        <ProductForm onDone={() => setCreating(false)} />
-      </SlideOver>
       <SlideOver open={Boolean(editing)} title="Edit product" onClose={() => setEditing(null)}>
         {editing && <ProductForm existing={editing} onDone={() => setEditing(null)} />}
       </SlideOver>
-      <ConfirmDialog open={Boolean(toDelete)} title="Delete product" message={`Remove ${toDelete?.name}? Products used by leads cannot be deleted.`} confirmLabel="Delete" danger onConfirm={confirmDelete} onCancel={() => setToDelete(null)} />
+      <ConfirmDialog
+        open={Boolean(toDelete)}
+        title={`Delete ${toDelete?.name}?`}
+        message="Products already used on a lead can't be deleted, so past deals stay accurate."
+        confirmLabel="Delete product"
+        danger
+        busy={remove.isPending}
+        onCancel={() => setToDelete(null)}
+        onConfirm={async () => {
+          try {
+            await remove.mutateAsync(toDelete!.id);
+            toast("Product deleted");
+          } catch (err) {
+            toast(apiError(err).message, "error");
+          }
+          setToDelete(null);
+        }}
+      />
     </div>
   );
 };
+
+export default ProductsPage;
