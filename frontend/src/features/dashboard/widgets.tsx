@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowDownRight, ArrowUpRight, CalendarClock, Minus } from "lucide-react";
+import { AlarmClock, AlertCircle, ArrowDownRight, ArrowUpRight, CalendarClock, IndianRupee, Layers, Minus, Target, UserPlus, type LucideIcon } from "lucide-react";
 import { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Sparkline } from "../../components/ui/Sparkline";
@@ -23,131 +23,121 @@ export const Panel = ({ title, sub, action, children, className, bodyClass }: { 
 );
 
 /* ------------------------------------------------------------------ */
-/* Vitals strip: the dashboard's headline, styled like a bedside monitor */
+/* KPI cards: every number carries a trend or a comparison, as in HubSpot and Zoho */
 
-interface Channel {
+interface Kpi {
   key: string;
   label: string;
   value: string;
-  color: string;
+  icon: LucideIcon;
   foot: ReactNode;
   trend?: number[];
-  alarm?: boolean;
+  tone?: string;
   to?: string;
 }
 
-const Delta = ({ value, goodWhenUp = true, label }: { value: number | null; goodWhenUp?: boolean; label: string }): JSX.Element => {
-  if (value === null) return <span style={{ color: "var(--ink-muted)" }}>New this period</span>;
+const DeltaPill = ({ value, label }: { value: number | null; label: string }): JSX.Element => {
+  if (value === null) return <span className="muted">New this period</span>;
   const up = value > 0;
   const flat = value === 0;
-  const good = flat ? null : up === goodWhenUp;
   const Icon = flat ? Minus : up ? ArrowUpRight : ArrowDownRight;
+  const shown = Math.abs(value) >= 100 ? Math.round(Math.abs(value)).toLocaleString("en-IN") : Math.abs(value);
   return (
-    <span className="inline-flex items-center gap-1">
-      <span className="inline-flex items-center gap-0.5 font-semibold" style={{ color: good === null ? "var(--ink-muted)" : good ? "var(--ch-ecg)" : "var(--ch-alarm)" }}>
-        <Icon className="h-3.5 w-3.5" />
-        {Math.abs(value) >= 100 ? Math.round(Math.abs(value)).toLocaleString("en-IN") : Math.abs(value)}%
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <span
+        className="inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-px text-[11.5px] font-semibold"
+        style={{
+          background: flat ? "var(--surface-3)" : up ? "var(--success-soft)" : "var(--danger-soft)",
+          color: flat ? "var(--muted)" : up ? "var(--success)" : "var(--danger)",
+        }}
+      >
+        <Icon className="h-3 w-3" />
+        {shown}%
       </span>
-      <span style={{ color: "var(--ink-muted)" }}>{label}</span>
+      <span className="muted truncate">{label}</span>
     </span>
   );
 };
 
-export const VitalsStrip = ({ data, periodLabel, compareLabel }: { data: DashboardOverview; periodLabel: string; compareLabel: string | null }): JSX.Element => {
+export const KpiCards = ({ data, compareLabel }: { data: DashboardOverview; periodLabel?: string; compareLabel: string | null }): JSX.Element => {
   const c = data.cards;
   const prev = data.previous;
   const change = (cur: number, p?: number) => (prev && p !== undefined ? (p ? Math.round(((cur - p) / p) * 1000) / 10 : cur ? null : 0) : undefined);
   const revDelta = change(data.current.revenue, prev?.revenue);
   const leadDelta = change(data.current.newLeads, prev?.newLeads);
 
-  const channels: Channel[] = [
+  const kpis: Kpi[] = [
     {
       key: "rev",
-      label: `Revenue, ${periodLabel.toLowerCase()}`,
+      label: "Revenue",
       value: inrCompact(data.current.revenue),
-      color: "var(--ch-ecg)",
+      icon: IndianRupee,
       trend: data.trend.map((t) => t.revenue),
-      foot: revDelta !== undefined && compareLabel ? <Delta value={revDelta} label={compareLabel} /> : <span style={{ color: "var(--ink-muted)" }}>{num(data.current.wonCount)} deals closed</span>,
+      foot: revDelta !== undefined && compareLabel ? <DeltaPill value={revDelta} label={compareLabel} /> : <span className="muted">{num(data.current.wonCount)} deals closed</span>,
       to: "/leads?view=list&status=WON",
     },
     {
       key: "pipe",
       label: "Open pipeline",
       value: inrCompact(c.pipelineValue),
-      color: "var(--ch-spo2)",
-      foot: <span style={{ color: "var(--ink-muted)" }}>{num(c.openLeads)} open leads</span>,
+      icon: Layers,
+      foot: <span className="muted">{num(c.openLeads)} open leads</span>,
       to: "/leads",
     },
     {
       key: "leads",
-      label: `New leads, ${periodLabel.toLowerCase()}`,
+      label: "New leads",
       value: num(data.current.newLeads),
-      color: "var(--ch-bp)",
+      icon: UserPlus,
       trend: data.trend.map((t) => t.leads),
-      foot: leadDelta !== undefined && compareLabel ? <Delta value={leadDelta} label={compareLabel} /> : <span style={{ color: "var(--ink-muted)" }}>{num(c.newCustomers)} new customers</span>,
+      foot: leadDelta !== undefined && compareLabel ? <DeltaPill value={leadDelta} label={compareLabel} /> : <span className="muted">{num(c.newCustomers)} new customers</span>,
       to: "/leads?view=list&sort=-createdAt",
     },
     {
       key: "win",
       label: "Win rate",
       value: `${c.winRate}%`,
-      color: "var(--ch-resp)",
-      foot: (
-        <span style={{ color: "var(--ink-muted)" }}>
-          {num(c.won)} won, {num(c.lost)} lost
-          {c.avgDealSize ? `, avg ${inrCompact(c.avgDealSize)}` : ""}
-        </span>
-      ),
+      icon: Target,
+      foot: <span className="muted">{num(c.won)} won, {num(c.lost)} lost{c.avgDealSize ? `, avg ${inrCompact(c.avgDealSize)}` : ""}</span>,
     },
     {
       key: "fu",
       label: "Overdue follow-ups",
       value: num(c.overdueFollowUps),
-      color: c.overdueFollowUps > 0 ? "var(--ch-alarm)" : "var(--ch-ecg)",
-      alarm: c.overdueFollowUps > 0,
-      foot: <span style={{ color: "var(--ink-muted)" }}>{num(c.dueTodayFollowUps)} due today</span>,
+      icon: AlarmClock,
+      tone: c.overdueFollowUps > 0 ? "var(--danger)" : undefined,
+      foot: <span className="muted">{num(c.dueTodayFollowUps)} due today</span>,
       to: "/follow-ups",
     },
   ];
 
   return (
-    <section
-      className="relative overflow-hidden rounded-[18px] border border-transparent dark:border-white/[0.07]"
-      style={{ background: "var(--ink)", color: "var(--ink-text)" }}
-      aria-label="Key numbers"
-    >
-      <div className="relative grid grid-cols-2 gap-px md:grid-cols-3 xl:grid-cols-5" style={{ background: "rgba(255,255,255,0.07)" }}>
-        {channels.map((ch, i) => {
-          const Inner = (
-            <>
-              <div className="flex items-center gap-2 text-[12px] font-medium" style={{ color: "var(--ink-muted)" }}>
-                <span className={cn("h-2 w-2 shrink-0 rounded-full", ch.alarm && "blip")} style={{ background: ch.color }} aria-hidden />
-                <span className="truncate">{ch.label}</span>
-              </div>
-              <div className="condensed mt-2 whitespace-nowrap text-[34px] font-semibold leading-none sm:text-[40px]" style={{ color: ch.color }}>
-                {ch.value}
-              </div>
-              {ch.trend && ch.trend.some((v) => v > 0) ? (
-                <div className="mt-3 hidden sm:block">
-                  <Sparkline values={ch.trend} color={ch.color} width={180} height={26} stretch />
+    <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 xl:gap-4" aria-label="Key numbers">
+      {kpis.map((k, i) => {
+        const body = (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <span className="muted truncate text-[12.5px] font-medium">{k.label}</span>
+              <k.icon className="muted h-4 w-4 shrink-0" />
+            </div>
+            <div className="mt-2.5 flex items-end justify-between gap-2">
+              <div className="condensed whitespace-nowrap text-[24px] leading-none" style={{ color: k.tone }}>{k.value}</div>
+              {k.trend && k.trend.some((v) => v > 0) && (
+                <div className="hidden w-[72px] sm:block">
+                  <Sparkline values={k.trend} color="var(--primary)" width={72} height={28} fill />
                 </div>
-              ) : null}
-              <div className="mt-auto truncate pt-2.5 text-[12px]">{ch.foot}</div>
-            </>
-          );
-          const cls = cn(
-            "flex flex-col px-5 py-5",
-            i === 4 && "col-span-2 xl:col-span-1",
-            ch.to && "transition-colors hover:bg-[var(--ink-2)]",
-          );
-          const style = { background: "var(--ink)" };
-          return ch.to ? (
-            <Link key={ch.key} to={ch.to} className={cls} style={style}>{Inner}</Link>
-          ) : (
-            <div key={ch.key} className={cls} style={style}>{Inner}</div>
-          );
-        })}
-      </div>
+              )}
+            </div>
+            <div className="mt-3 truncate text-[12px]" title={k.key === "rev" || k.key === "leads" ? "Compared with the same point in the previous period" : undefined}>{k.foot}</div>
+          </>
+        );
+        const cls = cn("panel block p-4 transition-colors", i === 4 && "col-span-2 md:col-span-1", k.to && "hover:border-[var(--border-strong)]");
+        return k.to ? (
+          <Link key={k.key} to={k.to} className={cls}>{body}</Link>
+        ) : (
+          <div key={k.key} className={cls}>{body}</div>
+        );
+      })}
     </section>
   );
 };
@@ -232,26 +222,27 @@ export const StageBreakdown = ({ stages }: { stages: DashboardOverview["stageCou
 export const Funnel = ({ data }: { data: { status: LeadStatus; count: number }[] }): JSX.Element => {
   const top = Math.max(1, data[0]?.count ?? 1);
   return (
-    <ol className="space-y-2.5">
-      {data.map((d, i) => {
-        const prev = i > 0 ? data[i - 1].count : null;
-        const conv = prev ? Math.round((d.count / prev) * 100) : null;
-        return (
-          <li key={d.status} className="grid grid-cols-[92px_1fr_32px_44px] items-center gap-3 text-sm">
-            <span className="text-2 truncate">{stageLabel(d.status)}</span>
-            <div className="h-6 rounded-[5px]" style={{ background: "var(--surface-2)" }}>
-              <div
-                className="flex h-full items-center rounded-[5px] px-2 text-xs font-semibold text-white"
-                style={{ width: `${Math.max(d.count ? 6 : 0, (d.count / top) * 100)}%`, background: "var(--primary)", opacity: 1 - i * 0.12 }}
-              />
-            </div>
-            <span className="num text-right font-semibold">{num(d.count)}</span>
-            <span className="num muted text-right text-xs">{conv !== null ? `${conv}%` : ""}</span>
-          </li>
-        );
-      })}
-      <li className="caption pt-1">Leads that reached each stage. The percentage is conversion from the stage above.</li>
-    </ol>
+    <div>
+      <ol className="space-y-3.5">
+        {data.map((d, i) => {
+          const prev = i > 0 ? data[i - 1].count : null;
+          const conv = prev ? Math.round((d.count / prev) * 100) : null;
+          return (
+            <li key={d.status}>
+              <div className="mb-1.5 flex items-baseline gap-2 text-[13px]">
+                <span className="text-2">{stageLabel(d.status)}</span>
+                <span className="num ml-auto font-medium">{num(d.count)}</span>
+                <span className="num muted w-10 text-right text-xs">{conv !== null ? `${conv}%` : ""}</span>
+              </div>
+              <div className="h-2 rounded-full" style={{ background: "var(--surface-3)" }}>
+                <div className="h-full rounded-full" style={{ width: `${Math.max(d.count ? 2 : 0, (d.count / top) * 100)}%`, background: "var(--primary)", opacity: 1 - i * 0.14 }} />
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="caption mt-4">Leads that reached each stage. The percentage is conversion from the stage above.</p>
+    </div>
   );
 };
 
@@ -317,8 +308,8 @@ export const SourceTable = ({ rows }: { rows: DashboardOverview["sourceBreakdown
         <tr className="muted text-left text-xs">
           <th className="pb-2 font-medium">Source</th>
           <th className="pb-2 font-medium">Leads</th>
-          <th className="whitespace-nowrap pb-2 text-right font-medium">Win rate</th>
-          <th className="pb-2 text-right font-medium">Revenue</th>
+          <th className="whitespace-nowrap pb-2 pl-2 text-right font-medium">Win rate</th>
+          <th className="pb-2 pl-3 text-right font-medium">Revenue</th>
         </tr>
       </thead>
       <tbody>
@@ -327,7 +318,7 @@ export const SourceTable = ({ rows }: { rows: DashboardOverview["sourceBreakdown
             <td className="py-2 pr-3">
               <Link to={`/leads?view=list&sourceId=${r.id}`} className="block max-w-[130px] truncate font-medium hover:underline" title={r.name}>{r.name}</Link>
             </td>
-            <td className="w-[30%] py-2 pr-3">
+            <td className="w-[26%] py-2 pr-2">
               <div className="flex items-center gap-2">
                 <div className="h-1.5 flex-1 rounded-full" style={{ background: "var(--surface-3)" }}>
                   <div className="h-full rounded-full" style={{ width: `${(r.leads / max) * 100}%`, background: "var(--primary)" }} />
@@ -335,8 +326,8 @@ export const SourceTable = ({ rows }: { rows: DashboardOverview["sourceBreakdown
                 <span className="num w-6 text-right text-xs">{r.leads}</span>
               </div>
             </td>
-            <td className="num py-2 text-right">{r.winRate}%</td>
-            <td className="num py-2 text-right font-medium">{inrCompact(r.revenue)}</td>
+            <td className="num whitespace-nowrap py-2 pl-2 text-right">{r.winRate}%</td>
+            <td className="num whitespace-nowrap py-2 pl-3 text-right font-medium">{inrCompact(r.revenue)}</td>
           </tr>
         ))}
       </tbody>

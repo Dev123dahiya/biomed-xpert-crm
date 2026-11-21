@@ -117,7 +117,7 @@ export const SlideOver = ({ open, title, description, onClose, children, width =
         style={{
           width,
           maxWidth: "100vw",
-          background: bare ? "var(--ink)" : "var(--surface)",
+          background: bare ? "var(--bg)" : "var(--surface)",
           borderLeft: side === "right" ? "1px solid var(--border)" : undefined,
           boxShadow: "var(--shadow-pop)",
         }}

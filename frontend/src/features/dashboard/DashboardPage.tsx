@@ -6,15 +6,16 @@ import { RevenueTrend } from "../../components/charts/RevenueTrend";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { ErrorNote, Skeleton } from "../../components/ui/States";
 import { greeting, inrCompact } from "../../lib/format";
-import { Panel, ActivityFeed, Agenda, Funnel, LostReasons, SourceTable, StageBreakdown, TargetMeter, TeamBoard, TopCustomers, VitalsStrip } from "./widgets";
+import { Panel, ActivityFeed, Agenda, Funnel, KpiCards, LostReasons, SourceTable, StageBreakdown, TargetMeter, TeamBoard, TopCustomers } from "./widgets";
 
 type PeriodKey = "month" | "30d" | "quarter" | "year" | "all";
 
+// Short labels fit the cards; each compares with the same point in the previous period.
 const PERIODS: { key: PeriodKey; label: string; compare: string | null }[] = [
-  { key: "month", label: "This month", compare: "vs same days last month" },
-  { key: "30d", label: "Last 30 days", compare: "vs previous 30 days" },
-  { key: "quarter", label: "This quarter", compare: "vs same point last quarter" },
-  { key: "year", label: "This year", compare: "vs same date last year" },
+  { key: "month", label: "This month", compare: "vs last month" },
+  { key: "30d", label: "Last 30 days", compare: "vs prior 30 days" },
+  { key: "quarter", label: "This quarter", compare: "vs last quarter" },
+  { key: "year", label: "This year", compare: "vs last year" },
   { key: "all", label: "All time", compare: null },
 ];
 
@@ -49,12 +50,12 @@ const rangeFor = (key: PeriodKey): { from?: string; to?: string; compareFrom?: s
 
 const DashboardSkeleton = (): JSX.Element => (
   <div className="space-y-5">
-    <Skeleton className="h-[150px] rounded-[18px]" />
-    <div className="grid gap-5 lg:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 xl:gap-4">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[118px] rounded-[12px]" />)}</div>
+    <div className="grid gap-4 lg:grid-cols-3 xl:gap-5">
       <Skeleton className="h-[320px] rounded-[14px] lg:col-span-2" />
       <Skeleton className="h-[320px] rounded-[14px]" />
     </div>
-    <div className="grid gap-5 lg:grid-cols-3">
+    <div className="grid gap-4 lg:grid-cols-3 xl:gap-5">
       {[0, 1, 2].map((i) => <Skeleton key={i} className="h-[280px] rounded-[14px]" />)}
     </div>
   </div>
@@ -110,10 +111,10 @@ const DashboardPage = (): JSX.Element => {
       ) : isError || !data ? (
         <ErrorNote message="The dashboard didn't load. Check your connection, then try again." onRetry={() => refetch()} />
       ) : (
-        <div className="space-y-5" style={{ opacity: isFetching ? 0.75 : 1, transition: "opacity .15s" }}>
-          <VitalsStrip data={data} periodLabel={meta.label} compareLabel={meta.compare} />
+        <div className="space-y-4 xl:space-y-5" style={{ opacity: isFetching ? 0.75 : 1, transition: "opacity .15s" }}>
+          <KpiCards data={data} periodLabel={meta.label} compareLabel={meta.compare} />
 
-          <div className="grid gap-5 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-3 xl:gap-5">
             <Panel
               className="lg:col-span-2"
               title="Revenue closed"
@@ -127,7 +128,7 @@ const DashboardPage = (): JSX.Element => {
             </Panel>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-3 xl:gap-5">
             <Panel title="Pipeline by stage" sub="Approximate value of leads in each stage" action={<Link to="/leads" className="btn btn-ghost btn-sm">Open board</Link>}>
               <StageBreakdown stages={data.stageCounts} />
             </Panel>
@@ -139,7 +140,7 @@ const DashboardPage = (): JSX.Element => {
             </Panel>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-3 xl:gap-5">
             <Panel title="Lead sources" sub="Where leads come from and how they convert">
               <SourceTable rows={data.sourceBreakdown} />
             </Panel>
@@ -151,7 +152,7 @@ const DashboardPage = (): JSX.Element => {
             </Panel>
           </div>
 
-          <div className="grid items-start gap-5 lg:grid-cols-5">
+          <div className="grid items-start gap-4 lg:grid-cols-5 xl:gap-5">
             {data.team.length > 0 && (
               <Panel className="lg:col-span-3" title="Team performance" sub={`Leads owned, ${meta.label.toLowerCase()}`}>
                 <TeamBoard rows={data.team} />

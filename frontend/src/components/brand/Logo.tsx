@@ -1,16 +1,20 @@
-// The mark is a single ECG complex: the signature of the bedside monitor.
-export const LogoMark = ({ size = 32 }: { size?: number }): JSX.Element => (
-  <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden>
-    <rect width="64" height="64" rx="14" fill="#163843" />
-    <path d="M8 36h12l5-13 8 24 6-17 4 6h13" fill="none" stroke="#3ddc97" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+// A single heartbeat on a blue tile: medical, calm, and legible at 16px.
+export const LogoMark = ({ size = 28 }: { size?: number }): JSX.Element => (
+  <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden className="shrink-0">
+    <defs>
+      <linearGradient id="bmx-tile" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#3b78f2" />
+        <stop offset="100%" stopColor="#1f55d6" />
+      </linearGradient>
+    </defs>
+    <rect width="64" height="64" rx="16" fill="url(#bmx-tile)" />
+    <path d="M12 34h9l4.5-11 7 20 5.5-14 3.5 5H52" fill="none" stroke="#fff" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
-export const Wordmark = ({ sub = "Sales CRM", light = true }: { sub?: string; light?: boolean }): JSX.Element => (
-  <div className="leading-none">
-    <div className="condensed text-[15px] font-bold tracking-[0.02em]" style={{ color: light ? "#fff" : "var(--text)" }}>
-      BIOMED XPERT
-    </div>
-    <div className="mt-1 text-[11px] font-medium" style={{ color: light ? "var(--ink-muted)" : "var(--muted)" }}>{sub}</div>
+export const Wordmark = ({ sub = "Sales CRM" }: { sub?: string; light?: boolean }): JSX.Element => (
+  <div className="min-w-0 leading-none">
+    <div className="truncate text-[13.5px] font-semibold tracking-[-0.01em]" style={{ color: "var(--text)" }}>BIOMED XPERT</div>
+    <div className="mt-[3px] truncate text-[11.5px]" style={{ color: "var(--muted)" }}>{sub}</div>
   </div>
 );

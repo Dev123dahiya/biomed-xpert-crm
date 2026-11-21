@@ -19,7 +19,7 @@ export const Sparkline = ({ values, color, width = 120, height = 32, fill = fals
     >
       {fill && pts.length > 1 && <path d={`${d} L${last[0]},${height} L${pts[0][0]},${height} Z`} fill={color} opacity={0.12} />}
       <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      {last && !stretch && <circle cx={last[0]} cy={last[1]} r={3.5} fill={color} stroke="var(--ink)" strokeWidth={2} />}
+      {last && !stretch && <circle cx={last[0]} cy={last[1]} r={3.5} fill={color} stroke="var(--surface)" strokeWidth={2} />}
     </svg>
   );
 };

@@ -8,7 +8,7 @@ import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { queryClient } from "./lib/queryClient";
 import { ThemeProvider } from "./lib/theme";
-import "@fontsource-variable/instrument-sans/standard.css";
+import "@fontsource-variable/inter/opsz.css";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(

@@ -4,6 +4,17 @@ A sales CRM for teams selling biomedical equipment to doctors, clinics and hospi
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
+## Design
+
+The interface follows the calm, neutral style of today's most respected work tools, Linear and Attio, built with shadcn/ui-style components:
+
+- A dim sidebar sits on the app background, and each page lives in a raised, rounded panel, so content leads and navigation recedes.
+- Warm, low-saturation grays, one blue accent, and near-black primary buttons.
+- Inter, with its display optical size for headings and tabular figures for numbers.
+- Hairline borders, soft avatars, and as few icons and separators as possible.
+- Every dashboard number comes with a trend or a target, and the board leads with the pipeline (the HubSpot and Pipedrive pattern).
+- Light, dark and match-device themes.
+
 ## Features
 
 **Dashboard**
@@ -41,6 +52,7 @@ A sales CRM for teams selling biomedical equipment to doctors, clinics and hospi
 |---|---|
 | ![Pipeline](docs/screenshots/pipeline.png) | ![Lead](docs/screenshots/lead.png) |
 | ![Customer](docs/screenshots/customer.png) | ![Dark mode](docs/screenshots/dashboard-dark.png) |
+| ![Sign in](docs/screenshots/login.png) | ![Mobile](docs/screenshots/mobile-dashboard.png) |
 
 ## Architecture
 

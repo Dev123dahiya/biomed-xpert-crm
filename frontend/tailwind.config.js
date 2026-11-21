@@ -5,10 +5,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Instrument Sans Variable"', '"Instrument Sans"', "system-ui", "sans-serif"],
+        sans: ['"Inter Variable"', "Inter", "system-ui", "sans-serif"],
       },
       colors: {
-        ink: "var(--ink)",
         primary: "var(--primary)",
       },
       screens: { xs: "420px" },

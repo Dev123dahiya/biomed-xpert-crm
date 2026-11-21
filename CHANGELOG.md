@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0 (November 2026)
+
+### Interface redesign
+- New visual language modelled on Linear, Attio and shadcn/ui: a dim sidebar with search and an account menu, and pages in an inset rounded panel with a slim header and breadcrumbs.
+- Warm neutral palette with a single blue accent, near-black primary buttons, and Inter with display-size headings.
+- Dashboard KPI cards with trend pills and sparklines, plus quieter charts and thinner funnel bars.
+- Calmer pipeline board, soft avatars, and refined tables, chips, tabs and segmented controls.
+- New split sign-in page with a live product preview, a new logo, favicon and social preview image.
+- Collapse the sidebar with Ctrl or Cmd plus backslash.
+
 ## 2.0.0 (November 2026)
 
 ### Security and publishing

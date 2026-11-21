@@ -47,11 +47,12 @@ const FilterBar = ({ search, onSearch }: { search: string; onSearch: (v: string)
   const active = Boolean(get("search") || priority || get("sourceId") || owner);
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2">
+    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
       <div className="relative w-full sm:w-72">
         <Search className="muted pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
         <input className="input pl-9" placeholder="Customer, phone or city" value={search} onChange={(e) => onSearch(e.target.value)} aria-label="Search leads" />
       </div>
+      <div className="scroll-thin -mx-3 flex items-center gap-2 overflow-x-auto px-3 pb-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
       <button className="chip" aria-pressed={owner === user?.id} onClick={() => set({ ownerId: owner === user?.id ? undefined : user?.id })}>
         My leads
       </button>
@@ -74,6 +75,7 @@ const FilterBar = ({ search, onSearch }: { search: string; onSearch: (v: string)
           <X className="h-3.5 w-3.5" /> Clear filters
         </button>
       )}
+      </div>
     </div>
   );
 };
@@ -109,18 +111,17 @@ const LeadCard = ({ card, status, dragging, onDragStart, onDragEnd }: { card: Bo
         onDragStart();
       }}
       onDragEnd={onDragEnd}
-      className={cn("card block p-3 transition-shadow hover:shadow-[0_4px_14px_-6px_rgba(15,42,51,.25)]", !terminal && "cursor-grab active:cursor-grabbing", dragging && "opacity-40")}
-      style={{ borderLeft: `3px solid ${STAGE_META[status].color}` }}
+      className={cn("card block p-3 transition-[box-shadow,border-color] hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-sm)]", !terminal && "cursor-grab active:cursor-grabbing", dragging && "opacity-40")}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-[13.5px] font-semibold leading-snug">{card.customer ?? "Customer"}</div>
+          <div className="truncate text-[13px] font-medium leading-snug">{card.customer ?? "Customer"}</div>
           <div className="muted truncate text-xs">{[card.contact !== card.customer ? card.contact : null, card.city].filter(Boolean).join(", ") || card.source}</div>
         </div>
         {card.owner && <Avatar name={card.owner.name} size={22} />}
       </div>
       <div className="mt-2.5 flex items-baseline justify-between gap-2">
-        <span className="num text-[15px] font-semibold">{inrCompact(card.finalValue ?? card.approxValue)}</span>
+        <span className="num text-[14px] font-semibold tracking-[-0.01em]">{inrCompact(card.finalValue ?? card.approxValue)}</span>
         <PriorityBadge priority={card.priority} />
       </div>
       <div className="muted mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]">
@@ -148,8 +149,8 @@ const Column = ({ col, dragFrom, draggingId, onDragStart, onDragEnd, onDrop }: {
 
   return (
     <div
-      className={cn("flex w-[284px] shrink-0 snap-start flex-col rounded-[14px] p-2 transition-colors", dragFrom && !allowed && dragFrom !== col.status && "drop-no", over && allowed && "drop-ok")}
-      style={{ background: "var(--surface-3)" }}
+      className={cn("flex w-[280px] shrink-0 snap-start flex-col rounded-[12px] border p-1.5 transition-colors", dragFrom && !allowed && dragFrom !== col.status && "drop-no", over && allowed && "drop-ok")}
+      style={{ background: "var(--surface-2)", borderColor: "var(--border)" }}
       onDragOver={(e) => {
         if (!allowed) return;
         e.preventDefault();
@@ -165,11 +166,11 @@ const Column = ({ col, dragFrom, draggingId, onDragStart, onDragEnd, onDrop }: {
       }}
       aria-label={`${meta.label} column`}
     >
-      <div className="flex items-center gap-2 px-1.5 pb-2.5 pt-1">
-        <StageDot status={col.status} size={9} />
-        <span className="text-sm font-semibold">{meta.label}</span>
-        <span className="num muted text-xs font-medium">{num(col.count)}</span>
-        <span className="num text-2 ml-auto text-xs font-semibold">{inrCompact(col.value ?? 0)}</span>
+      <div className="flex items-center gap-2 px-2 pb-2 pt-1.5">
+        <StageDot status={col.status} size={8} />
+        <span className="text-[13px] font-medium">{meta.label}</span>
+        <span className="num muted rounded-md px-1.5 text-[11.5px] font-medium" style={{ background: "var(--surface-3)" }}>{num(col.count)}</span>
+        <span className="num muted ml-auto text-[12px] font-medium">{inrCompact(col.value ?? 0)}</span>
       </div>
       <div className="flex min-h-[120px] flex-col gap-2">
         {col.leads.length === 0 ? (
@@ -200,7 +201,7 @@ const CloseZones = ({ onDrop }: { onDrop: (to: "WON" | "LOST") => void }): JSX.E
       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOver(to); }}
       onDragLeave={() => setOver(null)}
       onDrop={(e) => { e.preventDefault(); setOver(null); onDrop(to); }}
-      className="flex flex-1 items-center justify-center gap-2 rounded-[12px] border-2 border-dashed py-5 text-sm font-semibold transition-colors"
+      className="flex flex-1 items-center justify-center gap-2 rounded-[10px] border border-dashed py-4 text-[13px] font-medium transition-colors"
       style={{
         borderColor: STAGE_META[to].color,
         background: over === to ? `color-mix(in srgb, ${STAGE_META[to].color} 22%, var(--surface))` : "var(--surface)",
@@ -211,7 +212,7 @@ const CloseZones = ({ onDrop }: { onDrop: (to: "WON" | "LOST") => void }): JSX.E
     </div>
   );
   return (
-    <div className="anim-pop fixed inset-x-0 bottom-4 z-50 mx-auto flex w-[min(560px,calc(100vw-2rem))] gap-3 rounded-[16px] p-2.5" style={{ background: "var(--ink)", boxShadow: "var(--shadow-pop)" }}>
+    <div className="pop anim-pop fixed inset-x-0 bottom-5 z-50 mx-auto flex w-[min(520px,calc(100vw-2rem))] gap-2.5 rounded-[14px] p-2">
       {zone("WON", "Drop to mark won", Trophy)}
       {zone("LOST", "Drop to mark lost", XCircle)}
     </div>
@@ -251,7 +252,7 @@ const Board = ({ filters }: { filters: LeadFilters }): JSX.Element => {
       <div className="scroll-thin -mx-3 snap-x overflow-x-auto px-3 pb-3 sm:-mx-5 sm:px-5 lg:-mx-7 lg:px-7">
         <div className="flex min-w-max gap-3">
           {isLoading
-            ? BOARD_ORDER.map((s) => <Skeleton key={s} className="h-[420px] w-[284px] rounded-[14px]" />)
+            ? BOARD_ORDER.map((s) => <Skeleton key={s} className="h-[420px] w-[280px] rounded-[12px]" />)
             : BOARD_ORDER.map((status) => (
                 <Column
                   key={status}
