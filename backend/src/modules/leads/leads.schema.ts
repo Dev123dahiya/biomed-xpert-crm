@@ -15,6 +15,7 @@ export const createLeadSchema = z.object({
   approxValue: z.coerce.number().min(0).default(0),
   priority: z.nativeEnum(Priority).default(Priority.MEDIUM),
   notes: z.string().optional(),
+  ownerId: z.string().min(1).optional(),
   products: z.array(productLine).max(15).default([]),
   followUp: z.object({ dueAt: z.coerce.date(), note: z.string().optional() }).optional(),
 });
@@ -26,6 +27,7 @@ export const updateLeadSchema = z
     approxValue: z.coerce.number().min(0).optional(),
     priority: z.nativeEnum(Priority).optional(),
     notes: z.string().optional(),
+    ownerId: z.string().min(1).nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "Provide at least one field to update" });
 
@@ -93,6 +95,7 @@ export const listLeadsSchema = z.object({
   sourceId: z.string().optional(),
   priority: z.nativeEnum(Priority).optional(),
   search: z.string().optional(),
+  stage: z.enum(["open", "closed"]).optional(),
   page: z.coerce.number().optional(),
   pageSize: z.coerce.number().optional(),
   sort: z.string().optional(),

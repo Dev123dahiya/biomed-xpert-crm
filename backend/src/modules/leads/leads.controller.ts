@@ -19,7 +19,7 @@ export const leadsController = {
     created(res, await leadsService.create(req.body, req.user!.id));
   },
   async get(req: Request, res: Response): Promise<void> { ok(res, await leadsService.get(req.params.id)); },
-  async update(req: Request, res: Response): Promise<void> { ok(res, await leadsService.update(req.params.id, req.body)); },
+  async update(req: Request, res: Response): Promise<void> { ok(res, await leadsService.update(req.params.id, req.body, req.user!.id)); },
   async remove(req: Request, res: Response): Promise<void> { ok(res, await leadsService.remove(req.params.id)); },
   async changeStatus(req: Request, res: Response): Promise<void> {
     ok(res, await leadsService.changeStatus(req.params.id, req.body.toStatus as LeadStatus, req.body.note, req.user!.id));

@@ -5,10 +5,12 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['"IBM Plex Sans"', "sans-serif"],
-        sans: ["Inter", "sans-serif"],
-        mono: ['"IBM Plex Mono"', "monospace"],
+        sans: ['"Inter Variable"', "Inter", "system-ui", "sans-serif"],
       },
+      colors: {
+        primary: "var(--primary)",
+      },
+      screens: { xs: "420px" },
     },
   },
   plugins: [],

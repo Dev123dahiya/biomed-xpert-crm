@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { prisma } from "../../config/prisma";
 import { z } from "zod";
 import { AppError } from "../../common/AppError";
 import { PageParams, buildMeta, parseSort } from "../../common/pagination";
@@ -83,6 +84,36 @@ export const customersService = {
     return { deleted: true };
   },
 
+  // Bulk create from a spreadsheet. Rows that fail validation or match an existing
+  // customer (same name and phone, or same GSTIN) are skipped and reported back.
+  async importMany(rows: unknown[]) {
+    const result = { created: 0, skipped: 0, errors: [] as { row: number; message: string }[] };
+    for (let i = 0; i < rows.length; i++) {
+      const parsed = createCustomerSchema.safeParse(rows[i]);
+      if (!parsed.success) {
+        result.errors.push({ row: i + 1, message: parsed.error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ") });
+        continue;
+      }
+      const input = parsed.data;
+      const dupe = await prisma.customer.findFirst({
+        where: {
+          OR: [
+            ...(clean(input.gstin) ? [{ gstin: input.gstin }] : []),
+            { customerName: { equals: input.customerName, mode: "insensitive" as const }, phone: clean(input.phone) ?? null },
+          ],
+        },
+        select: { id: true },
+      });
+      if (dupe) {
+        result.skipped += 1;
+        continue;
+      }
+      await this.create(input);
+      result.created += 1;
+    }
+    return result;
+  },
+
   async timeline(id: string) {
     await this.get(id);
     const rows = await customersRepository.timeline(id);
@@ -90,6 +121,12 @@ export const customersService = {
       leadId: r.id,
       status: r.status,
       approxValue: toNumber(r.approxValue),
+      priority: r.priority,
+      source: r.source?.name ?? null,
+      owner: r.owner?.name ?? null,
+      productCount: r._count.products,
+      nextFollowUp: r.followUps[0]?.dueAt ?? null,
+      createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       finalValue: r.wonDeal ? toNumber(r.wonDeal.finalValue) : null,
       closingDate: r.wonDeal?.closingDate ?? null,

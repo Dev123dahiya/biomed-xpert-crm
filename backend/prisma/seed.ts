@@ -42,8 +42,9 @@ async function main(): Promise<void> {
   const salesRole = await prisma.role.create({ data: { name: "SALES" } });
 
   // Users -------------------------------------------------------------------
-  const adminHash = await bcrypt.hash("Admin@123", 12);
-  const salesHash = await bcrypt.hash("Sales@123", 12);
+  // Set SEED_ADMIN_PASSWORD / SEED_SALES_PASSWORD when seeding a real database.
+  const adminHash = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD ?? "Admin@123", 12);
+  const salesHash = await bcrypt.hash(process.env.SEED_SALES_PASSWORD ?? "Sales@123", 12);
 
   const admin = await prisma.user.create({
     data: {

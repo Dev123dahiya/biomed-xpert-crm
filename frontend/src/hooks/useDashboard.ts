@@ -1,12 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "../lib/api";
 import type { DashboardOverview } from "../types";
 
-export const useDashboard = () =>
+export const useDashboard = (range: { from?: string; to?: string; compareFrom?: string; compareTo?: string } = {}) =>
   useQuery({
-    queryKey: ["dashboard"],
-    queryFn: async () => {
-      const res = await api.get("/dashboard");
-      return unwrap<DashboardOverview>(res.data);
-    },
+    queryKey: ["dashboard", range],
+    placeholderData: keepPreviousData,
+    queryFn: async () => unwrap<DashboardOverview>((await api.get("/dashboard", { params: range })).data),
   });

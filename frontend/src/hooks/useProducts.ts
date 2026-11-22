@@ -1,12 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "../lib/api";
 import type { Paginated, Product } from "../types";
 
-export interface ProductQuery { search?: string; category?: string; page?: number; sort?: string }
+export interface ProductQuery { search?: string; category?: string; page?: number; pageSize?: number; sort?: string }
 
 export const useProducts = (params: ProductQuery) =>
   useQuery({
     queryKey: ["products", params],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const res = await api.get("/products", { params });
       return { items: unwrap<Product[]>(res.data), meta: res.data.meta } as Paginated<Product>;

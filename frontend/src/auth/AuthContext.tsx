@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { api, apiError, attemptRestore, setAccessToken, unwrap } from "../lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { api, apiError, attemptRestore, setAccessToken, setSessionExpiredHandler, unwrap } from "../lib/api";
 import type { AuthUser } from "../types";
 
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
+  isAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -14,6 +16,7 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
 
   useEffect(() => {
     let active = true;
@@ -34,6 +37,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
     };
   }, []);
 
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      setAccessToken(null);
+      setUser(null);
+    });
+    return () => setSessionExpiredHandler(null);
+  }, []);
+
   const login = useCallback(async (email: string, password: string) => {
     try {
       const res = await api.post("/auth/login", { email, password });
@@ -48,13 +59,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }): JSX.Element
   const logout = useCallback(async () => {
     try {
       await api.post("/auth/logout");
+    } catch {
+      /* sign out locally even if the server is unreachable */
     } finally {
       setAccessToken(null);
       setUser(null);
+      qc.clear();
     }
-  }, []);
+  }, [qc]);
 
-  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout]);
+  const value = useMemo(() => ({ user, loading, isAdmin: user?.role === "ADMIN", login, logout }), [user, loading, login, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 

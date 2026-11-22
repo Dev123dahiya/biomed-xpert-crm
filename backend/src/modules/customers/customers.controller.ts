@@ -14,5 +14,6 @@ export const customersController = {
   async get(req: Request, res: Response): Promise<void> { ok(res, await customersService.get(req.params.id)); },
   async update(req: Request, res: Response): Promise<void> { ok(res, await customersService.update(req.params.id, req.body)); },
   async remove(req: Request, res: Response): Promise<void> { ok(res, await customersService.remove(req.params.id)); },
+  async importMany(req: Request, res: Response): Promise<void> { ok(res, await customersService.importMany(req.body.rows)); },
   async timeline(req: Request, res: Response): Promise<void> { ok(res, await customersService.timeline(req.params.id)); },
 };
